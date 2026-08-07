@@ -608,8 +608,8 @@ def _award_winners(period_kind: str, period_key: str, claim_token: str) -> dict:
                 )
                 if inserted.rowcount == 1:
                     sdb._ensure_wallet(db, int(w["client_id"]))
-                    # Leaderboard prizes are fixed awards and intentionally bypass
-                    # temporary 2x boosts. Ledger value always equals wallet credit.
+                    # Credited directly rather than through add_coins, so the
+                    # ledger value always equals what lands in the wallet.
                     sdb._credit_wallet_with_debt(db, int(w["client_id"]), coins)
         stored = _fetchall(
             db,

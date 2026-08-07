@@ -2114,7 +2114,7 @@ LAYOUT = """<!DOCTYPE html>
       "ACTIVO": "ACTIVE",
       "Plan actual": "Current plan",
       "Mejorar a Plus": "Upgrade to Plus",
-      "Gasta monedas en congeladores de racha 🔥, banners de perfil y boosts temporales. Gana monedas completando sesiones de enfoque, quizzes y tarjetas.": "Spend coins on streak 🔥 freezes, profile banners, and temporary boosts. Earn coins by completing focus sessions, quizzes, and flashcards.",
+      "Gasta monedas en congeladores de racha 🔥 y banners de perfil. Gana monedas completando sesiones de enfoque, quizzes y tarjetas.": "Spend coins on streak 🔥 freezes and profile banners. Earn coins by completing focus sessions, quizzes, and flashcards.",
 
       "Comprar": "Buy",
       "Vender": "Sell",

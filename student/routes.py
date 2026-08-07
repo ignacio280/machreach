@@ -20515,27 +20515,6 @@ No markdown, no code fences. ONLY JSON.
         bundle_save  = sdb.STREAK_FREEZE_PRICE * bundle_qty - bundle_price
         bundle_disabled = "disabled" if (coins < bundle_price or freezes + bundle_qty > freeze_cap) else ""
 
-        # Boosts activos banner
-        active_boosts = sdb.get_active_boosts(cid)
-        if active_boosts:
-            chips = []
-            for b in active_boosts:
-                exp = b.get("expires_at") or ""
-                kind_label = "XP" if b.get("kind") == "xp" else "Coins"
-                chips.append(
-                    f'<span class="sh-active-chip" data-exp="{exp}">'
-                    f'\u26a1 {b.get("multiplier",1):g}\u00d7 {kind_label} \u00b7 '
-                    f'<span class="sh-cd">--:--:--</span></span>'
-                )
-            active_html = (
-                '<div class="card" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:none;">'
-                '<div style="font-weight:700;margin-bottom:6px;color:#78350f;">Boosts activos</div>'
-                f'<div style="display:flex;gap:8px;flex-wrap:wrap;">{"".join(chips)}</div>'
-                '</div>'
-            )
-        else:
-            active_html = ""
-
         # ── Subscription tier cards ────────────────────────
         subscription_section = ""
         try:
@@ -20742,8 +20721,6 @@ No markdown, no code fences. ONLY JSON.
           .shop-restore {{ display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding-top:16px;border-top:1px solid #E2DCCC;color:#1A1A1F;font-size:13px; }}
           .shop-restore span {{ color:#6E6A60; }}
           .shop-cd button:disabled {{ cursor:not-allowed!important;box-shadow:none!important;opacity:.58; }}
-          .sh-active-chip {{ display:inline-flex; align-items:center; gap:6px; padding:6px 10px; background:rgba(255,255,255,.7); border-radius:999px; font-size:12px; font-weight:600; color:#78350f; }}
-          .sh-cd {{ font-variant-numeric: tabular-nums; }}
           :root[data-theme="dark"] .shop-cd {{
             --card:#242129;
             --card-bg:#242129;
@@ -20812,10 +20789,6 @@ No markdown, no code fences. ONLY JSON.
             border-color:#8A6727;
             color:#F6D58C;
           }}
-          :root[data-theme="dark"] .shop-cd .sh-active-chip {{
-            background:#302C35;
-            color:#FFD0B5;
-          }}
           @media (max-width:680px) {{
             .shop-cd h1 {{ font-size:44px; }}
             .shop-tabs {{ top:58px; }}
@@ -20850,7 +20823,6 @@ No markdown, no code fences. ONLY JSON.
         </section>
 
         <section class="shop-panel" id="shop-cosmetics" data-shop-panel="cosmetics" {"hidden" if active_section != "cosmetics" else ""}>
-        {active_html}
         <div class="card">
           <div class="card-header"><h2>\u2744\ufe0f Congeladores de racha 🔥</h2></div>
           <p style="color:var(--text-muted);font-size:13px;">Se usan automáticamente si te saltas un día. Capacidad de tu plan: <b>{freezes}/{freeze_cap}</b> congeladores guardados. Gratis puede guardar hasta {sdb.FREE_STREAK_FREEZE_CAP}; Plus hasta {sdb.PAID_STREAK_FREEZE_CAP}.</p>
@@ -20939,10 +20911,6 @@ No markdown, no code fences. ONLY JSON.
           try {{ await shopRequest('freeze-bundle','/api/student/wallet/buy-freeze-bundle'); mrReload(); }}
           catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
         }}
-        async function buyBoost(key) {{
-          try {{ await shopRequest('boost:'+key,'/api/student/wallet/buy-boost',{{boost_key:key}}); mrReload(); }}
-          catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
-        }}
         async function buyBanner(key) {{
           try {{ await shopRequest('banner:'+key,'/api/student/wallet/buy-banner',{{banner_key:key}}); mrReload(); }}
           catch(e) {{ alert(e.message || 'No se pudo comprar.'); }}
@@ -20968,24 +20936,6 @@ No markdown, no code fences. ONLY JSON.
             mrReload();
           }} catch(e) {{ alert(e.message || 'No se pudo cambiar el plan.'); }}
         }}
-        // Live countdown for active boost chips
-        (function() {{
-          const chips = document.querySelectorAll('.sh-active-chip');
-          if (!chips.length) return;
-          function pad(n) {{ return String(n).padStart(2, '0'); }}
-          function tick() {{
-            const now = Date.now();
-            chips.forEach(chip => {{
-              const exp = new Date(chip.dataset.exp).getTime();
-              const ms = exp - now;
-              if (ms <= 0) {{ chip.querySelector('.sh-cd').textContent = 'expirado'; return; }}
-              const s = Math.floor(ms / 1000);
-              const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-              chip.querySelector('.sh-cd').textContent = pad(h) + ':' + pad(m) + ':' + pad(sec);
-            }});
-          }}
-          tick(); setInterval(tick, 1000);
-        }})();
         </script>
         """, active_page="student_shop")
 
@@ -21394,14 +21344,6 @@ No markdown, no code fences. ONLY JSON.
         if not _logged_in():
             return jsonify(ok=False, error="Login required"), 401
         return jsonify(sdb.buy_streak_freeze(_cid(), sdb.STREAK_FREEZE_BUNDLE_QTY, bundle=True))
-
-
-    @app.route("/api/student/wallet/buy-boost", methods=["POST"])
-    def student_wallet_buy_boost_api():
-        if not _logged_in():
-            return jsonify(ok=False, error="Login required"), 401
-        data = request.get_json(silent=True) or {}
-        return jsonify(sdb.buy_boost(_cid(), str(data.get("boost_key") or "")))
 
 
     @app.route("/api/student/wallet/buy-banner", methods=["POST"])

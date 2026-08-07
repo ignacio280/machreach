@@ -1128,7 +1128,7 @@ SPANISH_TO_EN_VISIBLE.update({
 
     "Gasta coins en congeladores de racha": "Spend coins on streak freezes",
     "Gasta monedas en congeladores de racha": "Spend coins on streak freezes",
-    "banners de perfil y boosts temporales.": "profile banners and temporary boosts.",
+    "y banners de perfil.": "and profile banners.",
     "Gana coins completando sessions de focus, quizzes y tarjetas.": "Earn coins by completing focus sessions, quizzes, and flashcards.",
     "Gana monedas completando sesiones de enfoque, quizzes y tarjetas.": "Earn coins by completing focus sessions, quizzes, and flashcards.",
     "Empieza con herramientas de estudio con IA diarias.": "Start with daily AI study tools.",

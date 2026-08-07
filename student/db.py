@@ -528,11 +528,6 @@ def init_student_db():
         init_coin_pack_orders_table()
     except Exception as e:
         log.exception("init_coin_pack_orders_table failed: %s", e)
-    # Timed boosts (2x XP, 2x coins)
-    try:
-        init_boosts_table()
-    except Exception as e:
-        log.exception("init_boosts_table failed: %s", e)
     # Planner per-block completion marks
     try:
         init_planner_done_table()
@@ -3516,14 +3511,7 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
             detail += f" — {course_name}"
         detail += f" · phase:{phase_id}"
 
-        base_xp = (minutes * 5) // 10
-        xp_multiplier = float(_fetchval(
-            db,
-            "SELECT COALESCE(MAX(multiplier),1.0) FROM student_boosts "
-            "WHERE client_id = %s AND kind = 'xp' AND expires_at > %s",
-            (client_id, datetime.now()),
-        ) or 1.0)
-        xp_awarded = int(round(base_xp * max(1.0, xp_multiplier)))
+        xp_awarded = (minutes * 5) // 10
         _exec(
             db,
             "INSERT INTO student_xp "
@@ -3532,14 +3520,7 @@ def claim_focus_phase_rewards(client_id: int, phase_id: str, minutes: int,
             (client_id, "focus_session", xp_awarded, detail, utc_now().isoformat()),
         )
 
-        base_coins = minutes // 10
-        coin_multiplier = float(_fetchval(
-            db,
-            "SELECT COALESCE(MAX(multiplier),1.0) FROM student_boosts "
-            "WHERE client_id = %s AND kind = 'coin' AND expires_at > %s",
-            (client_id, datetime.now()),
-        ) or 1.0)
-        coins_awarded = int(round(base_coins * max(1.0, coin_multiplier)))
+        coins_awarded = minutes // 10
         _ensure_wallet(db, client_id)
         if coins_awarded:
             _credit_wallet_with_debt(db, client_id, coins_awarded)
@@ -4476,7 +4457,6 @@ def export_student_data(client_id: int) -> dict:
         "referral_codes": "student_referral_codes",
         "course_outcomes": "student_course_outcomes",
         "planner_done": "student_planner_done",
-        "boosts": "student_boosts",
         "coin_pack_orders": "student_coin_pack_orders",
         "leaderboard_prizes": "student_lb_prize",
         "leaderboard_periods_seen": "student_lb_period_seen",
@@ -4944,19 +4924,6 @@ def get_notes(client_id: int, course_id: int | None = None) -> list[dict]:
 # ── XP / Gamification ──────────────────────────────────────
 
 def award_xp(client_id: int, action: str, xp: int, detail: str = "") -> int:
-    # Apply timed XP multiplier (2x potion, etc.) only on positive awards.
-    if xp and xp > 0:
-        try:
-            mult = get_active_boost(client_id, "xp")
-            if mult and mult > 1.0:
-                xp = int(round(xp * mult))
-        except Exception:
-            # Same contract as add_coins: award the base XP, but leave a trace
-            # so a broken multiplier cannot silently under-reward for weeks.
-            log.warning(
-                "xp boost lookup failed for client %s action=%s; awarding unboosted %s",
-                client_id, action, xp, exc_info=True,
-            )
     with get_db() as db:
         return _insert_returning_id(
             db,
@@ -7161,118 +7128,6 @@ COIN_PACKS: dict[str, dict[str, Any]] = {
     "ultra":  {"name": "Whale Pack",     "coins": 15000, "bonus": 4000, "price_clp": 34990, "tag": "+27%"},
 }
 
-# Timed boosts. Each entry: (label, multiplier, hours, price_coins)
-BOOSTS: dict[str, dict[str, Any]] = {
-}
-
-def init_boosts_table() -> None:
-    """Create the boosts table if missing."""
-    _create_table_safe(
-        "CREATE TABLE IF NOT EXISTS student_boosts ("
-        "id SERIAL PRIMARY KEY, "
-        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
-        "kind TEXT NOT NULL, "
-        "multiplier REAL NOT NULL DEFAULT 2.0, "
-        "expires_at TIMESTAMP NOT NULL, "
-        "created_at TIMESTAMP DEFAULT NOW())",
-        "CREATE TABLE IF NOT EXISTS student_boosts ("
-        "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-        "client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE, "
-        "kind TEXT NOT NULL, "
-        "multiplier REAL NOT NULL DEFAULT 2.0, "
-        "expires_at TIMESTAMP NOT NULL, "
-        "created_at TIMESTAMP DEFAULT (datetime('now','localtime')))",
-    )
-
-
-def get_active_boost(client_id: int, kind: str) -> float:
-    """Return the highest active multiplier for `kind` ('xp' or 'coin'), or 1.0.
-    Re-entrant safe: never raises (returns 1.0 on any failure)."""
-    try:
-        with get_db() as db:
-            row = _fetchone(
-                db,
-                "SELECT MAX(multiplier) AS m FROM student_boosts "
-                "WHERE client_id = %s AND kind = %s AND expires_at > %s",
-                (client_id, kind, datetime.now()),
-            )
-            m = float((row or {}).get("m") or 1.0)
-            return m if m >= 1.0 else 1.0
-    except Exception:
-        return 1.0
-
-
-def get_active_boosts(client_id: int) -> list:
-    """Return list of active boosts with kind, multiplier, expires_at (ISO)."""
-    try:
-        with get_db() as db:
-            rows = _fetchall(
-                db,
-                "SELECT kind, multiplier, expires_at FROM student_boosts "
-                "WHERE client_id = %s AND expires_at > %s ORDER BY expires_at DESC",
-                (client_id, datetime.now()),
-            ) or []
-        out = []
-        for r in rows:
-            exp = r.get("expires_at")
-            if hasattr(exp, "isoformat"):
-                exp = exp.isoformat()
-            out.append({"kind": r.get("kind"), "multiplier": float(r.get("multiplier") or 1.0), "expires_at": exp})
-        return out
-    except Exception:
-        return []
-
-
-def buy_boost(client_id: int, boost_key: str) -> dict:
-    """Purchase a timed boost. Stacks duration if same kind already active
-    (extends expiry by `hours`)."""
-    cfg = BOOSTS.get(boost_key)
-    if not cfg:
-        return {"ok": False, "error": "Unknown boost."}
-    cost = int(cfg["price_coins"])
-    hours = int(cfg["hours"])
-    mult = float(cfg["mult"])
-    kind = cfg["kind"]
-    from datetime import timedelta as _td
-    with get_db() as db:
-        _ensure_wallet(db, client_id)
-        coins = int(_fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s",
-                              (client_id,)) or 0)
-        if coins < cost:
-            return {"ok": False, "error": "Not enough coins."}
-        # If a same-kind boost is active, extend it; otherwise create new.
-        existing = _fetchone(
-            db,
-            "SELECT id, expires_at FROM student_boosts "
-            "WHERE client_id = %s AND kind = %s AND expires_at > %s "
-            "ORDER BY expires_at DESC LIMIT 1",
-            (client_id, kind, datetime.now()),
-        )
-        if existing:
-            cur_exp = existing["expires_at"]
-            if isinstance(cur_exp, str):
-                try:
-                    cur_exp = datetime.fromisoformat(cur_exp)
-                except Exception:
-                    cur_exp = datetime.now()
-            new_exp = cur_exp + _td(hours=hours)
-            _exec(db, "UPDATE student_boosts SET expires_at = %s, multiplier = %s WHERE id = %s",
-                  (new_exp, mult, existing["id"]))
-        else:
-            new_exp = datetime.now() + _td(hours=hours)
-            _exec(
-                db,
-                "INSERT INTO student_boosts (client_id, kind, multiplier, expires_at) "
-                "VALUES (%s, %s, %s, %s)",
-                (client_id, kind, mult, new_exp),
-            )
-        _exec(db, "UPDATE student_wallet SET coins = coins - %s WHERE client_id = %s",
-              (cost, client_id))
-        new_coins = int(_fetchval(db, "SELECT coins FROM student_wallet WHERE client_id = %s",
-                                  (client_id,)) or 0)
-    return {"ok": True, "coins": new_coins, "boost": {"kind": kind, "multiplier": mult,
-            "expires_at": new_exp.isoformat() if hasattr(new_exp, "isoformat") else str(new_exp)}}
-
 
 def init_wallet_table() -> None:
     """Create the wallet table if missing (called from init_student_db)."""
@@ -7458,30 +7313,16 @@ def _credit_wallet_with_debt(db, client_id: int, amount: int) -> int:
 
 
 def add_coins(client_id: int, amount: int, _reason: str = "") -> int:
-    """Add (or subtract) coins. Returns new balance.
-    Positive amounts get multiplied by an active 2x-coin boost if any."""
+    """Add (or subtract) coins. Returns new balance."""
     if amount == 0:
         return get_wallet(client_id)["coins"]
-    if amount > 0:
-        try:
-            mult = get_active_boost(client_id, "coin")
-            if mult and mult > 1.0:
-                amount = int(round(amount * mult))
-        except Exception:
-            # Credit the base amount rather than failing the grant, but never
-            # silently: a boost the student paid for was not applied.
-            log.warning(
-                "coin boost lookup failed for client %s; crediting unboosted %s",
-                client_id, amount, exc_info=True,
-            )
     with get_db() as db:
         _ensure_wallet(db, client_id)
         return _credit_wallet_with_debt(db, client_id, int(amount))
 
 
 def credit_coin_pack(client_id: int, pack_key: str, order_id: str | None = None) -> dict:
-    """Credit coins for a real-money pack purchase. Bypasses 2x-coin boost
-    (real-money purchases shouldn't double-stack with timed boosts).
+    """Credit coins for a real-money pack purchase.
 
     When `order_id` is supplied, the LS order is first written to a unique
     ledger row inside the same DB transaction. Duplicate webhook retries then

@@ -23,7 +23,6 @@ def test_wallet_routes_require_login(client, flask_app, monkeypatch):
     paths = (
         "buy-freeze",
         "buy-freeze-bundle",
-        "buy-boost",
         "buy-banner",
         "buy-coin-pack",
         "set-banner",
@@ -51,9 +50,6 @@ def test_wallet_purchase_and_equipment_lifecycle(
     assert sdb.add_coins(client_id, 5000, "test reward") == 5000
     sdb.award_xp(client_id, "test", 5000, "wallet eligibility")
 
-    assert client.post(
-        "/api/student/wallet/buy-boost", json={"boost_key": "unknown"}
-    ).get_json()["ok"] is False
     assert client.post(
         "/api/student/wallet/buy-banner", json={"banner_key": "unknown"}
     ).get_json()["ok"] is False
