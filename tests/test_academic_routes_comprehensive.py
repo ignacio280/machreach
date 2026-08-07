@@ -2,7 +2,7 @@ import pytest
 from datetime import UTC, datetime, timedelta
 
 from machreach_core.db import _exec, _fetchall, _fetchone, get_db
-from student.periods import FrozenClock, use_clock
+from student.periods import FrozenClock, use_clock, user_date
 
 
 @pytest.fixture()
@@ -166,30 +166,43 @@ def test_academic_analytics_returns_sanitized_zero_state_and_clamps_future_week(
 def test_academic_analytics_aggregates_real_sessions_and_skips_bad_dates(
     client, academic_student
 ):
-    today = datetime.now().date()
-    yesterday = today - timedelta(days=1)
-    with get_db() as db:
-        for plan_date, minutes, pages, notes in (
-            (f"{today.isoformat()} 09:00:00", 40, 3, "course: Algorithms"),
-            (today.isoformat(), 20, 2, "course: Algorithms"),
-            (yesterday.isoformat(), 30, 1, "course: Databases"),
-            ("not-a-date", 999, 9, "course: Ignored"),
-        ):
+    # The endpoint buckets every day with user_date(), i.e. the account's own
+    # timezone — America/Santiago for this CL student. Seeding from
+    # datetime.now() instead compared that against the runner's clock, which
+    # agree on a machine in Chile and disagree for the hours between Santiago
+    # midnight and UTC midnight. That is why the two-day streak below read as
+    # one day only on CI. Freeze both to the same instant: a Wednesday noon in
+    # Santiago, so "yesterday" stays inside the same ISO week.
+    with use_clock(FrozenClock(datetime(2026, 3, 11, 15, 0, tzinfo=UTC))):
+        today = user_date(academic_student)
+        yesterday = today - timedelta(days=1)
+        with get_db() as db:
+            for plan_date, minutes, pages, notes in (
+                (f"{today.isoformat()} 09:00:00", 40, 3, "course: Algorithms"),
+                (today.isoformat(), 20, 2, "course: Algorithms"),
+                (yesterday.isoformat(), 30, 1, "course: Databases"),
+                ("not-a-date", 999, 9, "course: Ignored"),
+            ):
+                _exec(
+                    db,
+                    "INSERT INTO student_study_progress "
+                    "(client_id, plan_date, focus_minutes, pages_read, notes) "
+                    "VALUES (%s, %s, %s, %s, %s)",
+                    (academic_student, plan_date, minutes, pages, notes),
+                )
             _exec(
                 db,
-                "INSERT INTO student_study_progress "
-                "(client_id, plan_date, focus_minutes, pages_read, notes) "
-                "VALUES (%s, %s, %s, %s, %s)",
-                (academic_student, plan_date, minutes, pages, notes),
+                "INSERT INTO student_xp (client_id, action, xp, detail) "
+                "VALUES (%s, %s, %s, %s)",
+                (academic_student, "analytics-contract", 55, "covered"),
             )
-        _exec(
-            db,
-            "INSERT INTO student_xp (client_id, action, xp, detail) "
-            "VALUES (%s, %s, %s, %s)",
-            (academic_student, "analytics-contract", 55, "covered"),
-        )
 
-    current = client.get("/api/academic/analytics?week_offset=0").get_json()
+        current = client.get("/api/academic/analytics?week_offset=0").get_json()
+        previous = client.get(
+            "/api/academic/analytics?week_offset=-1"
+        ).get_json()
+        older = client.get("/api/academic/analytics?week_offset=-3").get_json()
+
     assert current["totals"]["minutes"] == 1089
     assert current["totals"]["pages"] == 15
     assert current["totals"]["sessions"] == 4
@@ -201,11 +214,6 @@ def test_academic_analytics_aggregates_real_sessions_and_skips_bad_dates(
         "course": "Algorithms",
         "minutes": 60,
     }
-
-    previous = client.get(
-        "/api/academic/analytics?week_offset=-1"
-    ).get_json()
-    older = client.get("/api/academic/analytics?week_offset=-3").get_json()
     assert previous["week_label"] == "last week"
     assert " – " in older["week_label"] or " â€“ " in older["week_label"]
 
