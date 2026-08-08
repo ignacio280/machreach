@@ -117,6 +117,23 @@ jobs:
           npm ci
           node build.mjs
           git diff --exit-code -- ../static/machreach_landing
+      - name: Verify student app bundles match their sources
+        # static/machreach_app holds committed build output that the live
+        # student pages load directly, and nothing rebuilt it here until now.
+        # A .jsx edited without running build-app.mjs simply never reached a
+        # student: the source looked right, review looked right, and the page
+        # kept serving the previous bundle. That is how the ranking board lost
+        # its links to /student/profile/<id> without a single failing check.
+        #
+        # --stat because these are minified bundles: the file names say what is
+        # stale, and the full diff would be thousands of unreadable columns.
+        working-directory: landing_build
+        run: |
+          node build-app.mjs
+          git diff --exit-code --stat -- ../static/machreach_app || {
+            echo "::error::static/machreach_app is stale. Run 'node build-app.mjs' in landing_build/ and commit the rebuilt bundles."
+            exit 1
+          }
       - name: Validate Focus Guard JavaScript and manifest
         run: |
           node --check extensions/focus-guard/background.js
