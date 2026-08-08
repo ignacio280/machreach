@@ -28,14 +28,18 @@ function FriendRow({ u, kind, onAct, i = 0 }) {
   }, [menu]);
   return (
     <div className="fr-row" style={{ animation: "rowIn .5s var(--spring) both", animationDelay: i * 60 + "ms" }}>
-      <div className="fr-avatar" style={{ background: AV[u.id % AV.length] }}>
-        {ini3(u.n)}
-        {kind === "friend" && <span className={"dot2" + (u.on ? " on" : "")} />}
-      </div>
-      <div className="fr-who">
-        <div className="fr-name">{u.n} <span className="id">#{u.id}</span></div>
-        <div className={"fr-state" + (u.on ? " on" : "")}>{u.on ? "En línea" : u.s}</div>
-      </div>
+      {/* Avatar and name open the public profile; the action buttons beside
+          them stay outside the link so Aceptar/Bloquear cannot navigate. */}
+      <a className="fr-open" href={"/student/profile/" + u.id} title={"Ver el perfil de " + u.n}>
+        <div className="fr-avatar" style={{ background: AV[u.id % AV.length] }}>
+          {ini3(u.n)}
+          {kind === "friend" && <span className={"dot2" + (u.on ? " on" : "")} />}
+        </div>
+        <div className="fr-who">
+          <div className="fr-name">{u.n} <span className="id">#{u.id}</span></div>
+          <div className={"fr-state" + (u.on ? " on" : "")}>{u.on ? "En línea" : u.s}</div>
+        </div>
+      </a>
       {kind === "incoming" && (
         <div className="fr-actions">
           <button className="fr-btn orange" onClick={() => onAct("accept", u)}>Aceptar</button>

@@ -82,3 +82,8 @@
 .pz .c{font-family:var(--font-display);font-weight:800;font-size:20px;line-height:1;margin-top:5px}
 .pz .u{font-family:var(--font-mono);font-size:8.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:700;margin-top:3px}
 .pz.gold{background:#FFF3CF}
+
+/* Rows link to the student's public profile. They already carried the hover
+   lift that made them look clickable, so this only stops the anchor from
+   recolouring and underlining the text inside. */
+a.lbrow,a.pod{color:inherit;text-decoration:none}

@@ -86,6 +86,25 @@ def seed_verified_student(name: str, email: str) -> int:
 
 browser_id = seed_verified_student("Browser Student", "browser-e2e@example.test")
 ssub.set_tier(browser_id, "plus")
+
+# A second student with XP, befriended, so the leaderboard and the friends list
+# both have a row pointing at somebody else's profile. Without XP nobody shows
+# on a board at all: leaderboard() drops rows whose period total is zero.
+from student import db as sdb  # noqa: E402
+
+rival_id = seed_verified_student("Rival Student", "rival-e2e@example.test")
+sdb.award_xp(browser_id, "e2e-seed", 400, "leaderboard seed")
+sdb.award_xp(rival_id, "e2e-seed", 900, "leaderboard seed")
+sdb.add_friend(browser_id, rival_id)
+sdb.add_friend(rival_id, browser_id)
+# The board opens on País, which filters by country_iso and returns nothing
+# without one — these two are the only accounts a journey needs there.
+with get_db() as db:
+    _exec(
+        db,
+        "UPDATE clients SET country_iso = 'CL' WHERE id IN (%s, %s)",
+        (browser_id, rival_id),
+    )
 for project_name in ("chromium", "firefox", "webkit", "mobile-chrome", "mobile-safari"):
     seed_verified_student(
         f"Checkout Student {project_name}",

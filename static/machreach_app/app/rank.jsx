@@ -31,6 +31,13 @@ const NAMES = [
 const initials2 = (n) => { const p = n.split(" "); return (p[0][0] + (p[1] ? p[1][0] : "")).toUpperCase(); };
 const fmt = (n) => n.toLocaleString("es-CL");
 
+// Every row already lifts and shifts on hover, so the board has always looked
+// clickable — it just had nowhere to go. /student/profile/<id> exists and was
+// built for exactly this ("by clicking them on the leaderboard"); the React
+// board simply never linked to it. Sample rows in the design preview carry no
+// client_id, so they stay plain divs instead of linking to /profile/undefined.
+const profileHref = (raw) => (raw && raw.client_id ? "/student/profile/" + raw.client_id : null);
+
 function useRankRows(scope, period, live) {
   const [state, setState] = React.useState({ rows: live ? [] : NAMES, loading: !!live, label: "" });
   React.useEffect(() => {
@@ -106,8 +113,11 @@ function Arena({ scope, period, rows = NAMES, loading = false, heading = "" }) {
         {!loading && top.length === 0 && <div className="fr-empty">Todavía no hay XP en esta liga.</div>}
         {top.map(([n, u, xp, , raw], i) => {
           const pz = prizeFor(scope.id, i + 1, period);
+          const href = profileHref(raw);
+          const Pod = href ? "a" : "div";
           return (
-            <div className={"pod p" + (i + 1)} key={n} style={{ "--pd": [180, 0, 340][i] + "ms" }}>
+            <Pod className={"pod p" + (i + 1)} key={n} style={{ "--pd": [180, 0, 340][i] + "ms" }}
+              href={href || undefined} title={href ? "Ver el perfil de " + n : undefined}>
               <div className="pod-medal">{medals[i]}</div>
               <div className="pod-av" style={{ background: raw?.avatar_color || AV[i % AV.length] }}>{initials2(n)}</div>
               <div className="pod-n">{n}</div>
@@ -116,7 +126,7 @@ function Arena({ scope, period, rows = NAMES, loading = false, heading = "" }) {
               {pz > 0
                 ? <div className="pod-prize" title="Premio si esta posición se mantiene al cierre del período">🪙 +{pz} monedas</div>
                 : <div className="pod-prize empty">Gloria histórica</div>}
-            </div>
+            </Pod>
           );
         })}
       </div>
@@ -138,16 +148,19 @@ function Board({ scope, period, rows: allRows = NAMES, loading = false }) {
       {rows.map(([n, u, xp, me, raw], i) => {
         const rank = i + 4;
         const pz = prizeFor(scope.id, rank, period);
+        const href = profileHref(raw);
+        const Row = href ? "a" : "div";
         return (
           <React.Fragment key={n}>
             {i === 2 && <div className="lb-gap" style={{ "--rd": i * 70 + 40 + "ms" }}>· · · 38 estudiantes más · · ·</div>}
-            <div className={"lbrow" + (me ? " me" : "")} style={{ "--rd": i * 70 + "ms" }}>
+            <Row className={"lbrow" + (me ? " me" : "")} style={{ "--rd": i * 70 + "ms" }}
+              href={href || undefined} title={href ? "Ver el perfil de " + n : undefined}>
               <span className="rk num">{rank}º</span>
               <span className="av2" style={{ background: raw?.avatar_color || AV[(i + 3) % AV.length] }}>{initials2(n)}</span>
               <span className="who"><span className="nm2">{n}{me && " · tú"}</span><span className="mt">{u}</span></span>
               {pz > 0 && <span className="prz">🪙 +{pz}</span>}
               <span className="xp2 num"><CountXP v={xp} d={i * 70} /></span>
-            </div>
+            </Row>
           </React.Fragment>
         );
       })}

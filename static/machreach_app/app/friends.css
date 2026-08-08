@@ -50,3 +50,8 @@
 .ref-num{font-family:var(--font-display);font-weight:800;font-size:28px;line-height:1;letter-spacing:-.03em}
 .ref-stat .l{font-family:var(--font-mono);font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3);font-weight:700;margin-top:4px}
 .ref-status{font-family:var(--font-display);font-weight:800;font-size:14px;margin-top:4px}
+
+/* Avatar + name are one link to the public profile. It has to reproduce the
+   row's own flex sizing, since it now wraps the two children that used to be
+   direct flex items of .fr-row. */
+.fr-open{display:flex;align-items:center;gap:12px;flex:1;min-width:0;color:inherit;text-decoration:none}
