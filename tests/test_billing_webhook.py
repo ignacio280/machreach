@@ -1096,3 +1096,91 @@ def test_plus_monthly_insurance_is_claimed_once_under_concurrency(make_user):
         )
     assert wallet["streak_freezes"] == 1
     assert reward["plus_insurance_period_key"]
+
+
+# ── Events that arrive after the account is gone ────────────────────────
+#
+# Cancelling at the provider does not stop the event stream: a cancelled
+# subscription still emits `subscription_updated` and, at the end of the paid
+# period, `subscription_expired`. If the account was deleted in between, every
+# one of those events used to hit a foreign key on clients.id, 500, and be
+# retried by Lemon Squeezy forever.
+
+
+def _delete_client(cid: int) -> None:
+    with get_db() as db:
+        _exec(db, "DELETE FROM clients WHERE id = %s", (cid,))
+
+
+def test_lifecycle_event_for_deleted_account_is_acknowledged(client, make_user):
+    cid = make_user("Deleted Subscriber")
+    assert _post(client, _student_event("subscription_created", cid)).status_code == 200
+    _delete_client(cid)
+
+    for event in ("subscription_updated", "subscription_cancelled", "subscription_expired"):
+        response = _post(client, _student_event(event, cid))
+        assert response.status_code == 200, f"{event} was retried instead of acknowledged"
+
+
+def test_deleted_account_webhook_is_recorded_for_review(client, make_user):
+    cid = make_user("Audited Deleted Subscriber")
+    _delete_client(cid)
+
+    assert _post(client, _student_event("subscription_updated", cid)).status_code == 200
+
+    with get_db() as db:
+        recorded = _fetchone(
+            db,
+            "SELECT event_type FROM operational_events "
+            "WHERE event_type = 'billing_webhook_unknown_client' "
+            "ORDER BY id DESC LIMIT 1",
+        )
+    assert recorded is not None
+
+
+def test_coin_pack_for_deleted_account_is_acknowledged(client, make_user):
+    cid = make_user("Deleted Coin Buyer")
+    _delete_client(cid)
+
+    response = _post(client, _coin_order(cid, "order_deleted_1"))
+
+    assert response.status_code == 200
+
+
+def test_subscription_state_refuses_an_unknown_client(make_user):
+    cid = make_user("Vanishing Client")
+    _delete_client(cid)
+
+    result = ssub.set_subscription_state(cid, tier="plus", status="active")
+
+    assert result["ok"] is False
+    assert result["unknown_client"] is True
+
+
+def test_set_tier_refuses_an_unknown_client(make_user):
+    cid = make_user("Vanishing Tier Client")
+    _delete_client(cid)
+
+    result = ssub.set_tier(cid, "plus")
+
+    assert result["ok"] is False
+    assert result["unknown_client"] is True
+
+
+def test_deleted_account_event_does_not_stay_failed(client, make_user):
+    """A stuck event is what degrades /health/operations, so the settle must
+    land on the claim too — not just on the HTTP status."""
+    cid = make_user("Settled Deleted Subscriber")
+    _delete_client(cid)
+    with get_db() as db:
+        _exec(db, "DELETE FROM webhook_events WHERE provider = 'lemonsqueezy'")
+
+    assert _post(client, _student_event("subscription_expired", cid)).status_code == 200
+
+    with get_db() as db:
+        stuck = _fetchone(
+            db,
+            "SELECT COUNT(*) AS n FROM webhook_events "
+            "WHERE provider = 'lemonsqueezy' AND status = 'failed'",
+        )
+    assert stuck["n"] == 0

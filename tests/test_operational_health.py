@@ -165,3 +165,49 @@ def test_postgres_capacity_alert_uses_connection_utilization(monkeypatch):
         "maximum": 10,
         "utilization": 0.8,
     }
+
+
+def test_abandoning_a_terminal_webhook_clears_the_alert(monkeypatch):
+    """Events that failed before the deleted-account fix cannot be retried by
+    the provider any more, so the operator script is the only way out."""
+    from machreach_core.db import _exec, _fetchone, get_db
+    from scripts.resolve_failed_webhooks import main as resolve
+
+    _clear_operational_state()
+    _configure_dependencies(monkeypatch)
+    record_worker_heartbeat()
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO webhook_events (provider, event_key, event_name, status, last_error) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            ("lemonsqueezy", "id:dead-1", "subscription_expired", "failed",
+             "ForeignKeyViolation"),
+        )
+    assert collect_operational_health()["checks"]["failed_webhooks"]["status"] == "alert"
+
+    assert resolve(["--error", "ForeignKeyViolation", "--apply"]) == 0
+
+    assert collect_operational_health()["checks"]["failed_webhooks"]["count"] == 0
+    with get_db() as db:
+        row = _fetchone(
+            db, "SELECT status FROM webhook_events WHERE event_key = %s", ("id:dead-1",)
+        )
+    assert row["status"] == "abandoned"
+
+
+def test_resolve_script_refuses_to_close_every_failed_event(monkeypatch):
+    from machreach_core.db import _exec, get_db
+    from scripts.resolve_failed_webhooks import main as resolve
+
+    _clear_operational_state()
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO webhook_events (provider, event_key, event_name, status, last_error) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            ("lemonsqueezy", "id:dead-2", "subscription_payment_success", "failed", "Timeout"),
+        )
+
+    assert resolve(["--apply"]) == 1
+    assert collect_operational_health()["checks"]["failed_webhooks"]["status"] == "alert"

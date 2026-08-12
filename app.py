@@ -4565,6 +4565,23 @@ def lemonsqueezy_webhook():
 
     _log.info("[LS] webhook %s purpose=%s client=%s", event_name, purpose, cid)
 
+    # A cancelled subscription keeps emitting lifecycle events — `updated`, then
+    # `expired` at the end of the paid period — long after the account that
+    # owned it was deleted. Every table this handler writes is keyed on
+    # clients.id, so those late events used to hit the foreign key, return 500,
+    # and be retried by the provider against a row that can never come back.
+    # Settle the claim as done instead: nothing is owed to an account that no
+    # longer exists, and a retry of an already-stuck event now clears itself.
+    from machreach_core.db import get_client as _get_client
+    if _get_client(cid) is None:
+        from machreach_core.db import record_operational_event
+        record_operational_event("billing_webhook_unknown_client", event_name[:80])
+        _log.warning(
+            "[LS] settled %s for unknown client=%s purpose=%s", event_name, cid, purpose
+        )
+        _finish_claimed_ls_event()
+        return "Unknown client", 200
+
     # ── Student Plus subscription ──────────────────────────────────
     if purpose == "student_sub":
         try:

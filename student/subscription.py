@@ -801,6 +801,9 @@ def set_tier(client_id: int, tier: str) -> dict:
     if tier not in PLANS:
         return {"ok": False, "error": "Unknown plan."}
     with get_db() as db:
+        from machreach_core.db import _fetchone
+        if not _fetchone(db, "SELECT id FROM clients WHERE id=%s", (client_id,)):
+            return {"ok": False, "error": "Unknown client.", "unknown_client": True}
         subscription = _load_subscription_row(db, client_id)
         subscription.update({
             "tier": tier,
@@ -837,12 +840,17 @@ def set_subscription_state(
         from student.db import _USE_PG
         if not _USE_PG:
             db.execute("BEGIN IMMEDIATE")
-        _fetchone(
+        # The lock row is also the existence check: every table written below
+        # is keyed on clients.id, so a deleted account must fail here with an
+        # answer the caller can act on, not with a foreign-key violation from
+        # somewhere deep in the write.
+        if not _fetchone(
             db,
             "SELECT id FROM clients WHERE id=%s"
             + (" FOR UPDATE" if _USE_PG else ""),
             (client_id,),
-        )
+        ):
+            return {"ok": False, "error": "Unknown client.", "unknown_client": True}
         current_row = _fetchone(
             db,
             "SELECT provider_event_at FROM student_subscription_state "
