@@ -36,6 +36,18 @@ def _exam_with_material(client_id, *, name, weight, days_out, text):
     return course_id, exam_id, exam_day
 
 
+def _first_planned_day(client_id: int) -> date:
+    """The first day /planner/regenerate will actually plan.
+
+    Read in the student's own timezone, like the route does. On Sunday the
+    current week is spent, so the route plans the week ahead: a block dated
+    today would fall outside the planned window and be dropped, and the plan
+    would silently come back from the deterministic fallback.
+    """
+    today = sdb.user_date(client_id)
+    return today + timedelta(days=1) if today.weekday() == 6 else today
+
+
 def test_context_carries_weight_date_and_uploaded_material(client, make_user):
     client_id = _student(client, make_user, "Context Student")
     _, exam_id, exam_day = _exam_with_material(
@@ -134,10 +146,10 @@ def test_regenerate_uses_the_model_when_it_answers(client, flask_app, make_user,
         client_id, name="Prueba 1", weight=35, days_out=4, text="Álgebra lineal: diagonalización.",
     )
     monkeypatch.setitem(flask_app.config, "WTF_CSRF_ENABLED", False)
-    today = date.today()
+    planned_day = _first_planned_day(client_id)
     monkeypatch.setattr(planner_ai, "_call_model", lambda _prompt: {
         "difficulty": [{"exam_id": exam_id, "score": 4, "reason": "Demostraciones densas."}],
-        "days": [{"date": today.isoformat(), "blocks": [{
+        "days": [{"date": planned_day.isoformat(), "blocks": [{
             "exam_id": exam_id, "phase": "Practicar", "title": "Diagonalización: ejercicios",
             "topic": "Diagonalización", "minutes": 60,
             "why": "Vale 35%, faltan 4 días y el material es denso.",
@@ -150,10 +162,11 @@ def test_regenerate_uses_the_model_when_it_answers(client, flask_app, make_user,
     plan = client.post("/api/student/planner/regenerate", json={}).get_json()["plan"]
 
     assert plan["source"] == "ai"
-    today_blocks = next(day["blocks"] for day in plan["days"] if day["date"] == today.isoformat())
-    assert today_blocks[0]["title"] == "Diagonalización: ejercicios"
-    assert today_blocks[0]["why"]
-    assert today_blocks[0]["material_based"] is True
+    planned_blocks = next(
+        day["blocks"] for day in plan["days"] if day["date"] == planned_day.isoformat())
+    assert planned_blocks[0]["title"] == "Diagonalización: ejercicios"
+    assert planned_blocks[0]["why"]
+    assert planned_blocks[0]["material_based"] is True
     exam_row = next(e for e in plan["exams"] if e["id"] == exam_id)
     assert exam_row["difficulty"] == 4
     assert exam_row["difficulty_reason"]
