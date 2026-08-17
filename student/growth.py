@@ -95,11 +95,16 @@ def user_rows() -> list[dict]:
     with get_db() as db:
         clients = _fetchall(
             db,
-            "SELECT id, name, email, created_at, email_verified "
+            "SELECT id, name, email, created_at, email_verified, university_id, major_id "
             "FROM clients WHERE COALESCE(account_type,'student') = 'student' "
             "ORDER BY id",
             (),
         )
+        # Both catalogues are small (hundreds of rows) and shared by every
+        # account, so reading them whole beats an IN list long enough for
+        # SQLite to refuse it once many distinct carreras are in use.
+        universities = _fetchall(db, "SELECT id, name, short_name FROM universities", ())
+        majors = _fetchall(db, "SELECT id, name FROM majors", ())
         codes = _fetchall(db, "SELECT client_id, code FROM student_referral_codes", ())
         referrals = _fetchall(db, "SELECT referrer_id, referred_id FROM student_referrals", ())
         rewards = _fetchall(
@@ -116,6 +121,12 @@ def user_rows() -> list[dict]:
     verified = {int(c["id"]) for c in clients if c.get("email_verified")}
     code_by_client = {int(r["client_id"]): str(r["code"]) for r in codes}
     xp_by_client = {int(r["client_id"]): int(r["xp"] or 0) for r in xp_rows}
+    # The short name is what a person recognises in a table ("UChile"), but
+    # not every university carries one.
+    university_by_id = {
+        int(r["id"]): str(r.get("short_name") or r.get("name") or "") for r in universities
+    }
+    major_by_id = {int(r["id"]): str(r.get("name") or "") for r in majors}
 
     invited: dict[int, list[int]] = {}
     for row in referrals:
@@ -137,6 +148,11 @@ def user_rows() -> list[dict]:
             "name": str(client.get("name") or ""),
             "email": str(client.get("email") or ""),
             "created_at": str(client.get("created_at") or "")[:10],
+            # What the student picked in academic setup. Shown to the owner as
+            # it is: the profile switches that hide these on the leaderboard
+            # are about other students, not about the admin panel.
+            "university": university_by_id.get(int(client.get("university_id") or 0), ""),
+            "major": major_by_id.get(int(client.get("major_id") or 0), ""),
             "verified": client_id in verified,
             "paying": client_id in paying,
             "promo_plus": client_id in promo,

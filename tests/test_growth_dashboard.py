@@ -21,6 +21,22 @@ def _row_for(rows, client_id):
     return next(r for r in rows if r["id"] == client_id)
 
 
+def _seeded_academic_pair():
+    """A real (university, carrera) pair from the seed catalogue, since
+    academic setup refuses anything not approved."""
+    from machreach_core.db import _fetchone
+
+    with get_db() as db:
+        university = _fetchone(
+            db,
+            "SELECT id, short_name FROM universities WHERE name = %s",
+            ("Universidad de Chile",),
+        )
+        major = _fetchone(
+            db, "SELECT id, name FROM majors WHERE university_id IS NULL ORDER BY id LIMIT 1")
+    return university, major
+
+
 def test_each_user_row_counts_their_referrals_and_which_ones_pay(make_user):
     owner = make_user("Inviter", "inviter@growth.test")
     payer = make_user("Paying Friend", "payer@growth.test")
@@ -82,6 +98,23 @@ def test_summary_reports_the_referral_channel_conversion(make_user):
     assert stats["signups_from_referrals"] >= 1
     assert stats["referred_paying"] >= 1
     assert stats["referred_conversion_pct"] > 0
+
+
+def test_each_row_carries_the_university_and_carrera_the_student_picked(make_user):
+    from student import academic
+
+    studied = make_user("Studied", "studied@growth.test")
+    fresh = make_user("No Setup", "nosetup@growth.test")
+    university, major = _seeded_academic_pair()
+    academic.save_academic_profile(studied, "CL", int(university["id"]), int(major["id"]))
+
+    rows = growth.user_rows()
+
+    assert _row_for(rows, studied)["university"] == university["short_name"]
+    assert _row_for(rows, studied)["major"] == major["name"]
+    # Someone who never finished academic setup gets empty strings, not None.
+    assert _row_for(rows, fresh)["university"] == ""
+    assert _row_for(rows, fresh)["major"] == ""
 
 
 def test_signups_by_day_covers_every_day_without_gaps():
@@ -169,6 +202,28 @@ def test_the_page_can_be_filtered_to_paying_users(client, make_user):
 
     assert "filter-payer@growth.test" in body
     assert "filter-owner@growth.test" not in body
+
+
+def test_the_page_and_the_csv_show_the_university_and_carrera(client, make_user):
+    from student import academic
+
+    _admin_session(client, make_user, "Acad Owner", "acad-owner@growth.test")
+    student_id = make_user("Acad Student", "acad-student@growth.test")
+    university, major = _seeded_academic_pair()
+    academic.save_academic_profile(student_id, "CL", int(university["id"]), int(major["id"]))
+
+    body = client.get("/admin/growth").get_data(as_text=True)
+    csv_body = client.get("/admin/growth.csv").get_data(as_text=True)
+    searched = client.get(
+        "/admin/growth", query_string={"q": university["short_name"]}).get_data(as_text=True)
+
+    assert "<th>Universidad</th><th>Carrera</th>" in body
+    assert university["short_name"] in body
+    assert major["name"] in body
+    assert "Universidad,Carrera" in csv_body.splitlines()[0]
+    # The search box reaches the new columns too.
+    assert "acad-student@growth.test" in searched
+    assert "acad-owner@growth.test" not in searched
 
 
 def _admin_session(client, make_user, name, email, *, reauth=True):

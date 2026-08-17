@@ -4064,6 +4064,7 @@ def admin_growth_csv():
 
     columns = [
         ("id", "ID"), ("name", "Nombre"), ("email", "Correo"),
+        ("university", "Universidad"), ("major", "Carrera"),
         ("created_at", "Registro"), ("verified", "Verificado"),
         ("paying", "Paga Plus"), ("promo_plus", "Plus de regalo"),
         ("referral_code", "Codigo"), ("referred", "Referidos"),
@@ -4102,6 +4103,7 @@ def admin_growth():
     if query:
         needle = query.lower()
         view = [r for r in view if needle in r["name"].lower() or needle in r["email"].lower()
+                or needle in r["university"].lower() or needle in r["major"].lower()
                 or needle == r["referral_code"].lower()]
     if only == "paying":
         view = [r for r in view if r["paying"]]
@@ -4112,6 +4114,14 @@ def admin_growth():
 
     def yes_no(value: bool, good: str = "Sí", bad: str = "—") -> str:
         return f'<b style="color:#2E9266">{good}</b>' if value else f'<span style="color:#94939C">{bad}</span>'
+
+    def _academic_cell(value: str) -> str:
+        """University and carrera, truncated. Written-out carrera names are long
+        enough to push the rest of the row off screen, so the cell keeps the
+        full text in a tooltip instead."""
+        if not value:
+            return '<td class="acad"><span style="color:#94939C">—</span></td>'
+        return f'<td class="acad" title="{_esc(value)}"><span>{_esc(value)}</span></td>'
 
     def _delete_cell(row: dict) -> str:
         """Own account and other administrators are not deletable, so they get
@@ -4129,6 +4139,8 @@ def admin_growth():
             f"<td>{r['id']}</td>"
             f"<td>{_esc(r['name'])}</td>"
             f"<td><code>{_esc(r['email'])}</code></td>"
+            f"{_academic_cell(r['university'])}"
+            f"{_academic_cell(r['major'])}"
             f"<td>{_esc(r['created_at'])}</td>"
             f"<td>{yes_no(r['verified'])}</td>"
             f"<td>{yes_no(r['paying'], 'Paga')}{' <small>+regalo</small>' if r['promo_plus'] and r['paying'] else ''}"
@@ -4145,7 +4157,8 @@ def admin_growth():
         )
         table_html = (
             "<table><thead><tr>"
-            "<th>ID</th><th>Nombre</th><th>Correo</th><th>Registro</th><th>Verificado</th>"
+            "<th>ID</th><th>Nombre</th><th>Correo</th><th>Universidad</th><th>Carrera</th>"
+            "<th>Registro</th><th>Verificado</th>"
             "<th>Plan</th><th>Código</th><th>Referidos</th><th>Verificados</th>"
             "<th>Referidos que pagan</th><th>Semanas ganadas</th><th>XP</th><th></th>"
             "</tr></thead><tbody>" + body_rows + "</tbody></table>"
@@ -4205,10 +4218,11 @@ def admin_growth():
       .admin-growth th {{ text-align:left; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#77756F; border-bottom:1px solid #E2DCCC; padding:8px 10px; white-space:nowrap; }}
       .admin-growth td {{ padding:8px 10px; border-bottom:1px solid #F1ECE0; vertical-align:middle; white-space:nowrap; }}
       .admin-growth tbody tr:hover {{ background:#FBF8F0; }}
+      .admin-growth td.acad span {{ display:block; max-width:170px; overflow:hidden; text-overflow:ellipsis; }}
       .admin-growth code {{ font-size:12px; }}
       .admin-growth small {{ display:block; font-size:10.5px; }}
       .admin-tools {{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }}
-      .admin-tools input {{ padding:8px 12px; border:1px solid #E2DCCC; border-radius:999px; font-size:13px; min-width:220px; }}
+      .admin-tools input {{ padding:8px 12px; border:1px solid #E2DCCC; border-radius:999px; font-size:13px; min-width:300px; }}
       .admin-chip {{ display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:999px; border:1px solid #E2DCCC; background:#fff; color:#1A1A1F; font-size:12.5px; font-weight:800; cursor:pointer; text-decoration:none; }}
       .admin-chip:hover {{ border-color:#FF7A3D; color:#B14A16; }}
       .admin-chip.on {{ background:#FF7A3D; border-color:#FF7A3D; color:#fff; }}
@@ -4230,7 +4244,7 @@ def admin_growth():
         </div>
         <div class="admin-tools">
           <form method="get" action="/admin/growth" style="display:flex;gap:8px;">
-            <input name="q" value="{_esc(query)}" placeholder="Buscar por nombre, correo o código">
+            <input name="q" value="{_esc(query)}" placeholder="Buscar por nombre, correo, universidad, carrera o código">
             <button class="admin-chip" type="submit">Buscar</button>
           </form>
           {filter_link("", "Todos")}
