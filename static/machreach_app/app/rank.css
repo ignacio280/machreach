@@ -43,7 +43,10 @@
 [data-theme="dark"] .pod.p1{background:color-mix(in oklab,var(--amber) 26%,var(--surface))}
 [data-theme="dark"] .pod.p2{background:color-mix(in oklab,var(--sky) 20%,var(--surface))}
 [data-theme="dark"] .pod.p3{background:color-mix(in oklab,var(--brand) 22%,var(--surface))}
-[data-theme="dark"] .pod-prize{color:var(--ink);background:var(--amber)}
+/* The prize pills keep the same amber fill in both themes, so they need ink
+   that does not flip with the theme — --ink turns light in dark mode, which
+   left light-on-amber at 1.6:1. */
+[data-theme="dark"] .pod-prize,[data-theme="dark"] .lbrow .prz{color:#241834;background:var(--amber)}
 .pod-medal{font-size:26px;line-height:1}
 .pod-av{width:56px;height:56px;margin:9px auto 8px;border-radius:50%;border:var(--bd);display:grid;place-items:center;font-family:var(--font-display);font-weight:800;font-size:19px;box-shadow:0 3px 0 var(--ink)}
 .pod.p1 .pod-av{width:68px;height:68px;font-size:23px}
@@ -85,5 +88,10 @@
 
 /* Rows link to the student's public profile. They already carried the hover
    lift that made them look clickable, so this only stops the anchor from
-   recolouring and underlining the text inside. */
-a.lbrow,a.pod{color:inherit;text-decoration:none}
+   recolouring and underlining the text inside.
+
+   Pin the card's own ink rather than inheriting: the podium sits inside
+   .arena, which paints its text white for the dark banner, and `inherit`
+   dragged that white onto the cream medal cards — a 1.11:1 name on #FFF3CF.
+   --ink already flips with the theme, so this stays correct in dark mode. */
+a.lbrow,a.pod{color:var(--ink);text-decoration:none}
