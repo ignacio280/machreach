@@ -505,7 +505,7 @@ def test_monthly_leaderboard_report_is_delivered(monkeypatch):
 
     assert len(_FakeSMTP.sent) == 1
     assert _FakeSMTP.sent[0]["To"] == "owner@example.test"
-    assert "June 2026" in _FakeSMTP.sent[0]["Subject"]
+    assert "junio 2026" in _FakeSMTP.sent[0]["Subject"]
 
 
 def test_ssl_email_paths_and_empty_monthly_report_are_delivered(monkeypatch):
@@ -760,4 +760,4 @@ def test_january_reports_on_the_previous_december(monkeypatch):
     worker.send_monthly_leaderboard_email()
 
     assert asked == {"year": 2026, "month": 12}
-    assert "2026-12" in _FakeSMTP.sent[0]["Subject"]
+    assert "diciembre 2026" in _FakeSMTP.sent[0]["Subject"]

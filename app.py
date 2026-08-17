@@ -2839,13 +2839,13 @@ def forgot_password():
             from machreach_core.config import BASE_URL
             reset_link = f"{BASE_URL}/reset-password/{token}"
             body = "\n\n".join([
-                "Click here to reset your MachReach password:",
+                "Entra aquí para restablecer tu contraseña de MachReach:",
                 reset_link,
-                "This link expires in 1 hour.",
-                "If you didn't request this, ignore this email.",
+                "Este enlace vence en 1 hora.",
+                "Si no lo pediste, ignora este correo.",
             ])
             try:
-                _send_system_email(email, "MachReach — Password Reset", body)
+                _send_system_email(email, "MachReach — Restablecer contraseña", body)
             except Exception:
                 pass  # Don't reveal whether email was sent
         # Same answer either way, so the page can never be used to discover

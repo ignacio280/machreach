@@ -33,13 +33,14 @@ def _deliver_once(client_id: int, sender: Sender) -> bool:
     expires = (datetime.now(timezone.utc) + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
     create_verification_token(client_id, token, expires)
     verify_link = f"{BASE_URL}/verify-email/{token}"
+    saludo = f"Hola {client.get('name')}" if client.get("name") else "Hola"
     body = (
-        f"Hi {client.get('name') or 'there'},\n\n"
-        "Welcome to MachReach! Please verify your email address:\n\n"
-        f"{verify_link}\n\nThis link expires in 24 hours.\n\n— MachReach"
+        f"{saludo},\n\n"
+        "Te damos la bienvenida a MachReach. Confirma tu correo aquí:\n\n"
+        f"{verify_link}\n\nEste enlace vence en 24 horas.\n\n— MachReach"
     )
     try:
-        return bool(sender(str(client.get("email") or ""), "MachReach — Verify Your Email", body))
+        return bool(sender(str(client.get("email") or ""), "MachReach — Confirma tu correo", body))
     except Exception:
         return False
 

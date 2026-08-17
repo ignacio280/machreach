@@ -632,9 +632,9 @@ def _notification_payloads(
     from machreach_core.config import LEADERBOARD_WINNERS_RECIPIENT
     from machreach_core.db import _fetchone
 
-    label = "weekly" if period_kind == "week" else "monthly"
-    pretty = {"global": "Global", "country": "Country",
-              "university": "University", "major": "Major"}
+    label_es = "semanal" if period_kind == "week" else "mensual"
+    pretty = {"global": "Global", "country": "País",
+              "university": "Universidad", "major": "Carrera"}
     per_client: dict[int, list[dict]] = {}
     for scope, winners in summary.items():
         for winner in winners:
@@ -651,40 +651,41 @@ def _notification_payloads(
         if not client or not client.get("email"):
             continue
         total = sum(int(win["coins"]) for win in wins)
+        saludo = f"Hola {client.get('name')}" if client.get("name") else "Hola"
         lines = [
-            f"Hi {client.get('name') or 'there'},", "",
-            f"Great news — you placed on the {label} MachReach leaderboards ({period_key}):",
+            f"{saludo},", "",
+            f"Buenas noticias — quedaste en el ranking {label_es} de MachReach ({period_key}):",
             "",
         ]
         for win in sorted(wins, key=lambda item: (-item["coins"], item["scope"])):
             bucket = f" [{win['scope_value']}]" if win.get("scope_value") else ""
             lines.append(
-                f"  • {pretty[win['scope']]}{bucket} — rank #{win['rank']} "
-                f"→ +{win['coins']} coins"
+                f"  • {pretty[win['scope']]}{bucket} — puesto #{win['rank']} "
+                f"→ +{win['coins']} monedas"
             )
-        lines += ["", f"Total reward: {total} coins. It is already in your wallet.",
+        lines += ["", f"Total ganado: {total} monedas. Ya están en tu billetera.",
                   "", "— MachReach"]
         payloads.append((
             f"lb:{period_kind}:{period_key}:winner:{client_id}",
             client_id,
             str(client["email"]),
-            f"You won {total} coins on the {label} leaderboard!",
+            f"¡Ganaste {total} monedas en el ranking {label_es}!",
             "\n".join(lines),
         ))
 
     if LEADERBOARD_WINNERS_RECIPIENT:
-        lines = [f"{label.title()} leaderboard payouts complete — {period_key}", ""]
+        lines = [f"Pagos del ranking {label_es} completados — {period_key}", ""]
         for scope in ("global", "country", "university", "major"):
             for winner in summary.get(scope) or []:
                 lines.append(
                     f"{scope.upper()} #{winner['rank']} {winner['name']} "
-                    f"(id={winner['client_id']}) — {winner['xp']} XP → {winner['coins']} coins"
+                    f"(id={winner['client_id']}) — {winner['xp']} XP → {winner['coins']} monedas"
                 )
         payloads.append((
             f"lb:{period_kind}:{period_key}:admin",
             None,
             LEADERBOARD_WINNERS_RECIPIENT,
-            f"[MachReach] {label.title()} leaderboard payouts — {period_key}",
+            f"[MachReach] Pagos del ranking {label_es} — {period_key}",
             "\n".join(lines),
         ))
     return payloads

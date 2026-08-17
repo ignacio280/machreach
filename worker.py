@@ -534,13 +534,14 @@ def send_streak_risk_pushes():
         for r in recipients:
             try:
                 streak = int(r["streak"])
-                name = r.get("name") or "there"
-                subject = f"Don't lose your {streak}-day streak"
+                name = r.get("name") or ""
+                subject = f"No pierdas tu racha de {streak} días"
+                saludo = f"Hola {name}" if name else "Hola"
                 body = (
-                    f"Hi {name},\n\n"
-                    f"You still have time today. Your {streak}-day study streak resets at midnight — "
-                    f"10 minutes of focus saves it.\n\n"
-                    f"Open MachReach: {BASE_URL}/student/dashboard\n\n"
+                    f"{saludo},\n\n"
+                    f"Todavía estás a tiempo. Tu racha de {streak} días de estudio se reinicia a "
+                    f"medianoche — con 10 minutos de enfoque la salvas.\n\n"
+                    f"Abre MachReach: {BASE_URL}/student/dashboard\n\n"
                     f"— MachReach"
                 )
                 msg = MIMEText(body, "plain", "utf-8")
@@ -604,6 +605,12 @@ def send_monthly_leaderboard_email(year: int | None = None, month: int | None = 
         data = monthly_winners(year, month, top_n=3)
         label = data["label"]
         summary = data.get("summary", {}) or {}
+        # monthly_winners builds its label with strftime("%B"), which is the
+        # C-locale English month on Render. Localise it here rather than in the
+        # shared helper — the admin preview page still renders the English one.
+        _MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+                  "agosto", "septiembre", "octubre", "noviembre", "diciembre")
+        label_es = f"{_MESES[month - 1]} {year}"
 
         def _fmt_rows(rows):
             if not rows:
@@ -626,10 +633,10 @@ def send_monthly_leaderboard_email(year: int | None = None, month: int | None = 
             return "\n".join(out)
 
         body = []
-        body.append(f"MachReach — Leaderboard winners for {label}")
+        body.append(f"MachReach — Ganadores del ranking de {label_es}")
         body.append("=" * 60)
         body.append("")
-        body.append(f"Period: {data['start']} → {data['end_exclusive']} (exclusive)")
+        body.append(f"Período: {data['start']} → {data['end_exclusive']} (exclusivo)")
         body.append("")
         body.append("📊 RESUMEN DEL MES")
         body.append(f"  Total XP otorgado:    {summary.get('total_xp_awarded', 0):,}")
@@ -652,7 +659,7 @@ def send_monthly_leaderboard_email(year: int | None = None, month: int | None = 
         msg = MIMEText("\n".join(body), "plain", "utf-8")
         msg["From"] = SMTP_USER
         msg["To"] = LEADERBOARD_WINNERS_RECIPIENT
-        msg["Subject"] = f"MachReach leaderboard winners — {label}"
+        msg["Subject"] = f"MachReach — Ganadores del ranking de {label_es}"
 
         if int(SMTP_PORT) == 587:
             with smtplib.SMTP(SMTP_HOST, int(SMTP_PORT), timeout=30) as srv:
