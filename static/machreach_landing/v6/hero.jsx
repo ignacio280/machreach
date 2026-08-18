@@ -80,7 +80,7 @@ function Hero() {
           </h1>
           <p className="hero-sub rv" style={{ "--d": "560ms" }}>MachReach convierte tu semestre en un juego que <em>sí quieres ganar</em>.</p>
           <div className="hero-cta rv" style={{ "--d": "650ms" }}>
-            <a href="https://machreach.com/register" className="btn btn-primary btn-lg"><IconCanvas size={19} /> Usar la extensión</a>
+            <a href="https://machreach.com/register" className="btn btn-primary btn-lg hero-cta-primary"><IconCanvas size={19} /> <span className="hero-cta-full">Usar la extensión</span><span className="hero-cta-short">Crear cuenta gratis</span></a>
             <a href="#how" className="btn btn-ghost btn-lg">Ver cómo funciona <IconArrow size={17} /></a>
           </div>
           <div className="hero-trust rv" style={{ "--d": "750ms" }}>

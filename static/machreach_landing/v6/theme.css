@@ -162,6 +162,16 @@ section{padding:clamp(70px,8.5vw,120px) 0;position:relative}
   .nav-cta svg{display:none}
 }
 
+/* The hero's primary CTA sells the Chrome extension, which cannot be installed
+   on a phone — and phones are where ad traffic arrives. Under 768px the same
+   button offers the account instead, and the Canvas mark comes off with it. */
+.hero-cta-short{display:none}
+@media (max-width:768px){
+  .hero-cta-full{display:none}
+  .hero-cta-short{display:inline}
+  .hero-cta-primary svg{display:none}
+}
+
 .tagchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;border-radius:999px;border:2px solid var(--ink);color:var(--ink);background:var(--surface)}
 .live-dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 var(--good);animation:dot 1.3s var(--ease) infinite}
 @keyframes dot{0%{box-shadow:0 0 0 0 color-mix(in oklab,var(--good) 70%,transparent)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}

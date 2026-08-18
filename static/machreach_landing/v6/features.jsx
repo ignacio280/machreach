@@ -5,9 +5,12 @@
    strip at all rather than an invented — or embarrassing — one. */
 
 // Below this many weekly actives the strip is more of an admission than a
-// boast, and an almost-empty band reads as a layout bug. Lower it once the
-// numbers can carry themselves.
-const STATS_MIN_STUDENTS = 10;
+// boast, and an almost-empty band reads as a layout bug. Two figures in the
+// teens are worse than none on paid traffic: a stranger who came from an ad
+// reads "19 estudiantes activos" as an empty room and leaves. Under the floor
+// we show the beta band instead — a real promise, no numbers. Lower it once
+// the numbers can carry themselves.
+const STATS_MIN_STUDENTS = 150;
 
 function StatsStrip() {
   const [live, setLive] = React.useState(null);
@@ -27,7 +30,20 @@ function StatsStrip() {
   const s1 = useCountUp(live ? live.students_week : 0, go);
   const s2 = useCountUp(live ? live.hours_today : 0, go);
   const s3 = useCountUp(live ? live.universities : 0, go);
-  if (!live || live.students_week < STATS_MIN_STUDENTS) return null;
+  if (!live || live.students_week < STATS_MIN_STUDENTS) {
+    // No count is honest enough to print yet, so sell the thing that is true
+    // whatever the count is: the ranking restarts on Monday and starts empty.
+    return (
+      <section style={{ paddingTop: 0 }}>
+        <div className="container">
+          <div className="stats-beta pop in">
+            <span className="tagchip"><i className="live-dot" /> beta abierta</span>
+            <p>Cada lunes el ranking vuelve a cero. Entra ahora y parte primero en el de tu universidad.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
   // A stat that is zero right now simply stays home.
   const items = [
     { v: Math.round(s1).toLocaleString("es-CL"), l: "estudiantes activos esta semana" },

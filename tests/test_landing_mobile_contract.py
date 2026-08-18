@@ -49,6 +49,43 @@ def test_landing_is_responsive():
     assert ".feat-grid,.price-grid{grid-template-columns:1fr}" in ui
 
 
+def test_hero_cta_offers_the_account_not_the_extension_on_phones():
+    """Paid traffic lands on phones, where a Chrome extension cannot be
+    installed at all. Under 768px the hero's primary button must offer the
+    account instead, and the Canvas mark that sells the extension goes with
+    it — otherwise the only above-the-fold call to action is one the visitor
+    is unable to act on."""
+    hero = (LANDING / "v6/hero.jsx").read_text(encoding="utf-8")
+    assert 'className="hero-cta-full">Usar la extensión</span>' in hero
+    assert 'className="hero-cta-short">Crear cuenta gratis</span>' in hero
+
+    theme = (LANDING / "v6/theme.css").read_text(encoding="utf-8")
+    assert ".hero-cta-short{display:none}" in theme
+    assert "@media (max-width:768px)" in theme
+    for rule in [".hero-cta-full{display:none}", ".hero-cta-short{display:inline}",
+                 ".hero-cta-primary svg{display:none}"]:
+        assert rule in theme, f"missing phone rule for the hero CTA: {rule}"
+
+
+def test_stats_strip_hides_thin_numbers_behind_the_beta_band():
+    """A stranger who arrives from an ad reads two-digit activity counts as an
+    empty room. Below the floor the strip must not print a number at all — the
+    beta band takes its place, which is true whatever the count is."""
+    features = (LANDING / "v6/features.jsx").read_text(encoding="utf-8")
+    floor = next(
+        line for line in features.splitlines()
+        if line.startswith("const STATS_MIN_STUDENTS")
+    )
+    assert int(floor.split("=")[1].strip(" ;")) >= 150, floor
+    assert "live.students_week < STATS_MIN_STUDENTS" in features
+    # Under the floor: the band, and no figure anywhere inside it.
+    assert 'className="stats-beta pop in"' in features
+    assert "Cada lunes el ranking vuelve a cero" in features
+
+    ui = (LANDING / "v6/ui.css").read_text(encoding="utf-8")
+    assert ".stats-beta{" in ui
+
+
 def test_intro_is_remembered_and_respects_reduced_motion():
     """Returning and reduced-motion visitors skip directly to the page while
     the authored replay control can deliberately clear the completion gate."""
