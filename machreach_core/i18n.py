@@ -132,6 +132,14 @@ TRANSLATIONS = {
     "student_ui.study": {"en": "Study", "es": "Estudio"},
     "student_ui.quizzes": {"en": "Quizzes", "es": "Quizzes"},
     "student_ui.flashcards": {"en": "Flashcards", "es": "Tarjetas"},
+    "student_ui.quiz_job_in_progress": {
+        "en": "You already have a quiz being generated. Wait for it to finish, then upload this material.",
+        "es": "Ya tienes un quiz generándose. Espera a que termine y sube este material después.",
+    },
+    "student_ui.flashcard_job_in_progress": {
+        "en": "You already have flashcards being generated. Wait for them to finish, then upload this material.",
+        "es": "Ya tienes flashcards generándose. Espera a que terminen y sube este material después.",
+    },
     "student_ui.essays": {"en": "Essays", "es": "Ensayos"},
     "student_ui.community": {"en": "Community", "es": "Comunidad"},
     "student_ui.leaderboard": {"en": "Leaderboard", "es": "Ranking"},

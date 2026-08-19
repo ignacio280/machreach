@@ -10,6 +10,7 @@ from datetime import datetime
 import hashlib
 import hmac
 import json
+from uuid import uuid4
 
 from cryptography.fernet import Fernet, InvalidToken
 from machreach_core.config import DATABASE_URL, ENCRYPTION_KEY, SECRET_KEY
@@ -752,6 +753,11 @@ def init_async_jobs_table():
                 raise
 
 
+# Stored inside input_json so no migration is needed. Identifies one *run* of a
+# job: stable across that run's retries, different for every new enqueue.
+_RUN_ID_KEY = "_run_id"
+
+
 def set_async_job_status(job_type: str, job_key: str, status: str, progress: str = "", payload=None, error: str = ""):
     """Persist a background job's latest visible status."""
     payload_json = json.dumps(payload or {}, separators=(",", ":"))
@@ -799,7 +805,12 @@ def enqueue_async_job(job_type: str, job_key: str, input_payload=None, progress:
     if current.get("status") in ("queued", "running", "sending"):
         return current
 
-    input_json = json.dumps(input_payload or {}, separators=(",", ":"))
+    # Every enqueue is a distinct run with its own id. Work that reserves AI
+    # quota keys its reservation on it, so a second upload cannot replay the
+    # result the previous run settled, while a retry of *this* run still can.
+    stored_input = dict(input_payload or {})
+    stored_input[_RUN_ID_KEY] = uuid4().hex
+    input_json = json.dumps(stored_input, separators=(",", ":"))
     payload_json = json.dumps(visible_payload or {}, separators=(",", ":"))
     max_attempts = max(1, int(max_attempts or 1))
     now = _now_expr()
@@ -893,9 +904,27 @@ def claim_async_jobs(job_type: str, limit: int = 1, progress: str = "Running") -
                     claimed.append(claimed_job)
 
     for job in claimed:
-        job["input"] = _decode_json_dict(job.get("input_json"))
-        job.pop("input_json", None)
+        data = _decode_json_dict(job.pop("input_json", None))
+        run_id = str(data.pop(_RUN_ID_KEY, "") or "")
+        if not run_id:
+            # Queued before run ids existed. Mint one and persist it, so a
+            # retry of this same run reuses the key instead of counting as new.
+            run_id = uuid4().hex
+            _store_run_id(job["job_type"], job["job_key"], data, run_id)
+        job["run_id"] = run_id
+        job["input"] = data
     return claimed
+
+
+def _store_run_id(job_type: str, job_key: str, data: dict, run_id: str) -> None:
+    stored = dict(data)
+    stored[_RUN_ID_KEY] = run_id
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE async_jobs SET input_json = %s WHERE job_type = %s AND job_key = %s",
+            (json.dumps(stored, separators=(",", ":")), job_type, str(job_key)),
+        )
 
 
 def recover_stale_async_jobs(stale_after_seconds: int = 3600) -> int:

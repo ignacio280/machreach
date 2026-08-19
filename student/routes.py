@@ -14662,7 +14662,12 @@ Material:
         from machreach_core.db import enqueue_async_job, get_async_job_status
         existing = get_async_job_status("student_flashcard_generation", str(_cid()))
         if existing.get("status") in ("queued", "running"):
-            return jsonify({"queued": True, "flashcard_status": existing}), 202
+            from machreach_core.i18n import t as _t
+            return jsonify({
+                "error": _t("student_ui.flashcard_job_in_progress"),
+                "already_running": True,
+                "flashcard_status": existing,
+            }), 409
         queued_status = enqueue_async_job(
             "student_flashcard_generation",
             str(_cid()),
@@ -15078,9 +15083,17 @@ Material:
         if not _ok:
             return jsonify({"error": _why, "upgrade_required": True}), 402
 
+        # One job row per student: a second upload while the first is still
+        # running cannot be stored, so say so instead of answering "queued"
+        # and dropping the material on the floor.
         existing = _quiz_job_status(client_id)
         if existing.get("status") in ("queued", "running"):
-            return jsonify({"queued": True, "quiz_status": existing})
+            from machreach_core.i18n import t as _t
+            return jsonify({
+                "error": _t("student_ui.quiz_job_in_progress"),
+                "already_running": True,
+                "quiz_status": existing,
+            }), 409
 
         data = request.get_json(force=True) if request.is_json else {}
         queued_status = _queue_quiz_job(client_id, data)

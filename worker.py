@@ -75,7 +75,9 @@ def _set_quiz_job_status(client_id: int, status: str, progress: str = "", **payl
 def _process_student_quiz_job(job: dict):
     client_id = int(job["job_key"])
     data = job.get("input") or {}
-    reservation_key = f"quiz-job:{job.get('id') or job['job_key']}"
+    # Keyed on this run, not on the student: reusing one key per student made
+    # every quiz after the first replay the first one's settled reservation.
+    reservation_key = f"quiz-job:{job.get('run_id') or job['job_key']}"
     _set_quiz_job_status(client_id, "running", "Generating your quiz...")
     try:
         from student import db as sdb
@@ -211,7 +213,7 @@ def _set_flashcard_job_status(client_id: int, status: str, progress: str = "", *
 def _process_student_flashcard_job(job: dict):
     client_id = int(job["job_key"])
     data = job.get("input") or {}
-    reservation_key = f"flashcard-job:{job.get('id') or job['job_key']}"
+    reservation_key = f"flashcard-job:{job.get('run_id') or job['job_key']}"
     _set_flashcard_job_status(client_id, "running", "Generating your flashcards...")
     try:
         from student import db as sdb

@@ -1,8 +1,23 @@
 import worker
 import runpy
 from machreach_core import lemonsqueezy
-from machreach_core.db import enqueue_async_job, get_async_job_status
+from machreach_core.db import claim_async_jobs, enqueue_async_job, get_async_job_status
 from student import ai_usage, analyzer, db as sdb, subscription
+
+
+def _claim_job_for(job_type, client_id):
+    """Claim queued jobs until this student's own job comes up.
+
+    The worker claims the oldest queued job of a type, and earlier tests leave
+    queued rows of the same type behind, so a single claim is not ours.
+    """
+    while True:
+        claimed = claim_async_jobs(job_type, limit=10)
+        if not claimed:
+            raise AssertionError(f"no queued {job_type} job for client {client_id}")
+        for job in claimed:
+            if job["job_key"] == str(client_id):
+                return job
 
 
 def test_leaderboard_worker_runs_all_recovery_stages_and_contains_failures(
@@ -110,8 +125,8 @@ def test_completed_ai_reservations_restore_worker_results_without_regeneration(
         lambda **kwargs: (_ for _ in ()).throw(AssertionError("must not regenerate")),
     )
 
-    worker._process_student_quiz_job({"job_key": str(quiz_client), "id": 901})
-    worker._process_student_flashcard_job({"job_key": str(cards_client), "id": 902})
+    worker._process_student_quiz_job({"job_key": str(quiz_client), "run_id": "run-901"})
+    worker._process_student_flashcard_job({"job_key": str(cards_client), "run_id": "run-902"})
 
     assert get_async_job_status(
         "student_quiz_generation", str(quiz_client)
@@ -761,3 +776,63 @@ def test_january_reports_on_the_previous_december(monkeypatch):
 
     assert asked == {"year": 2026, "month": 12}
     assert "diciembre 2026" in _FakeSMTP.sent[0]["Subject"]
+
+
+def test_a_second_quiz_job_generates_a_new_quiz_instead_of_replaying_the_first(
+    monkeypatch, make_user
+):
+    """Each queued generation is its own AI reservation.
+
+    Reusing one reservation key per student made every quiz after the first
+    replay the first one's result: the job flipped to "done" in seconds and no
+    new quiz was ever written.
+    """
+    client_id = make_user("Repeat Quiz Worker")
+    monkeypatch.setattr(subscription, "FREE_DAILY_QUIZZES", 5)
+    monkeypatch.setattr(subscription, "can_generate_quiz_today", lambda cid: (True, ""))
+    monkeypatch.setattr(subscription, "cap_questions", lambda cid, count: count)
+    monkeypatch.setattr(analyzer, "generate_quiz", lambda **kwargs: [{
+        "topic": "Limits", "question": "Q?", "option_a": "A", "option_b": "B",
+        "option_c": "C", "option_d": "D", "correct": "a", "explanation": "Because",
+    }])
+
+    quiz_ids = []
+    for title in ("First PDF", "Second PDF"):
+        enqueue_async_job(
+            "student_quiz_generation",
+            str(client_id),
+            input_payload={"source_text": f"Material from {title}", "title": title, "count": 1},
+        )
+        job = _claim_job_for("student_quiz_generation", client_id)
+        worker._process_student_quiz_job(job)
+        status = get_async_job_status("student_quiz_generation", str(client_id))
+        assert status["status"] == "done", status
+        quiz_ids.append(status["quiz_id"])
+
+    assert quiz_ids[0] != quiz_ids[1]
+    assert sdb.get_quiz(quiz_ids[1], client_id)["title"] == "Second PDF"
+
+
+def test_a_second_flashcard_job_builds_a_new_deck_instead_of_replaying_the_first(
+    monkeypatch, make_user
+):
+    client_id = make_user("Repeat Cards Worker")
+    monkeypatch.setattr(subscription, "FREE_DAILY_FLASHCARD_SETS", 5)
+    monkeypatch.setattr(subscription, "can_generate_flashcards_today", lambda cid: (True, ""))
+    monkeypatch.setattr(subscription, "cap_cards", lambda cid, count: count)
+    monkeypatch.setattr(analyzer, "generate_flashcards", lambda **kwargs: [{"front": "Q", "back": "A"}])
+
+    deck_ids = []
+    for title in ("First PDF", "Second PDF"):
+        enqueue_async_job(
+            "student_flashcard_generation",
+            str(client_id),
+            input_payload={"source_text": f"Material from {title}", "title": title, "count": 1},
+        )
+        job = _claim_job_for("student_flashcard_generation", client_id)
+        worker._process_student_flashcard_job(job)
+        status = get_async_job_status("student_flashcard_generation", str(client_id))
+        assert status["status"] == "done", status
+        deck_ids.append(status["deck_id"])
+
+    assert deck_ids[0] != deck_ids[1]

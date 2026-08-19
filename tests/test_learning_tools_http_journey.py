@@ -189,7 +189,8 @@ def test_flashcard_crud_progress_and_generation_queue(
         "/api/student/flashcards/generate",
         json={"source_text": "Retry"},
     )
-    assert duplicate.status_code == 202
+    assert duplicate.status_code == 409
+    assert duplicate.get_json()["already_running"] is True
 
     assert client.delete(f"/api/student/flashcards/decks/{deck_id}").get_json() == {
         "ok": True
@@ -296,10 +297,12 @@ def test_quiz_scoring_analysis_queue_and_deletion(
         json={"course_id": course_id},
     ).get_json()
     assert queued["queued"] is True
-    assert client.post(
+    in_flight = client.post(
         "/api/student/quizzes/generate-async",
         json={"course_id": course_id},
-    ).get_json()["queued"] is True
+    )
+    assert in_flight.status_code == 409
+    assert in_flight.get_json()["already_running"] is True
     assert client.get(
         "/api/student/quizzes/generate/status"
     ).get_json()["status"] in {"queued", "running"}

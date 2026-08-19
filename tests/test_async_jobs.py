@@ -85,6 +85,8 @@ def test_enqueue_async_job_hides_input_from_status_and_claims_once():
     assert "source_text" not in get_async_job_status("test_queue", "quiz-input")
 
     claimed = claim_async_jobs("test_queue", limit=1, progress="Running")
+    run_id = claimed[0].pop("run_id", "")
+    assert run_id
     assert claimed == [{
         "job_type": "test_queue",
         "job_key": "quiz-input",
@@ -145,3 +147,40 @@ def test_interrupted_job_is_requeued_with_its_attempt_budget_preserved():
     assert recover_stale_async_jobs(stale_after_seconds=60) >= 1
     second = claim_async_jobs("recoverable", limit=1)
     assert second[0]["attempts"] == 2
+
+
+def test_each_enqueue_gets_its_own_run_id_but_a_retry_keeps_it():
+    """The run id is what AI reservations key on.
+
+    A new enqueue must look like new work; a retry of the same run must not,
+    or the retry would reserve (and bill) a second generation.
+    """
+    enqueue_async_job("run_id_queue", "job-1", input_payload={"x": 1})
+    first = claim_async_jobs("run_id_queue", limit=1)[0]
+
+    fail_async_job("run_id_queue", "job-1", "temporary outage", retry=True)
+    retried = claim_async_jobs("run_id_queue", limit=1)[0]
+    assert retried["run_id"] == first["run_id"]
+    assert retried["input"] == {"x": 1}
+
+    set_async_job_status("run_id_queue", "job-1", "done", progress="Finished")
+    enqueue_async_job("run_id_queue", "job-1", input_payload={"x": 2})
+    second = claim_async_jobs("run_id_queue", limit=1)[0]
+    assert second["run_id"] != first["run_id"]
+
+
+def test_a_job_queued_before_run_ids_existed_is_backfilled_on_claim():
+    enqueue_async_job("legacy_queue", "job-1", input_payload={"x": 1})
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE async_jobs SET input_json = %s WHERE job_type = %s AND job_key = %s",
+            ('{"x": 1}', "legacy_queue", "job-1"),
+        )
+
+    claimed = claim_async_jobs("legacy_queue", limit=1)[0]
+    assert claimed["run_id"]
+    assert claimed["input"] == {"x": 1}
+
+    fail_async_job("legacy_queue", "job-1", "temporary outage", retry=True)
+    assert claim_async_jobs("legacy_queue", limit=1)[0]["run_id"] == claimed["run_id"]
