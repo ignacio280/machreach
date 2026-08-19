@@ -46,6 +46,27 @@ def _student_event(event, cid, tier="plus"):
     }
 
 
+def _student_order(cid: int, order_id: str = "order_test_1") -> dict:
+    """The `order_created` event a Plus checkout emits next to the subscription
+    one. Order payloads carry the product and variant in first_order_item."""
+    return {
+        "meta": {
+            "event_name": "order_created",
+            "custom_data": {"purpose": "student_sub", "client_id": str(cid), "tier": "plus"},
+        },
+        "data": {
+            "id": order_id,
+            "attributes": {
+                "store_id": cfg.LEMON_SQUEEZY_STORE_ID,
+                "first_order_item": {
+                    "product_id": cfg.LS_PRODUCT_STUDENT_PLUS,
+                    "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
+                },
+            },
+        },
+    }
+
+
 def _coin_order(cid: int, order_id: str, pack_key: str = "small") -> dict:
     return {
         "meta": {
@@ -127,6 +148,53 @@ def test_unbound_subscription_without_product_id_is_rejected(client, make_user):
     created["data"]["attributes"]["product_id"] = None
 
     assert _post(client, created).status_code == 400
+    assert ssub.get_tier(cid) == "free"
+
+
+def test_plus_order_created_is_settled_rather_than_left_failed(client, make_user):
+    """The order event that accompanies a Plus checkout must be recognised from
+    first_order_item. It grants nothing — subscription_created does that — but a
+    rejected order sticks in webhook_events at `failed`, and one such row keeps
+    /health/operations degraded, which fails the uptime monitor every 5 minutes
+    for as long as it sits there."""
+    cid = make_user()
+    order = _student_order(cid)
+    order["meta"]["event_id"] = "evt-order-plus-1"
+
+    assert _post(client, order).status_code == 200
+
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT status FROM webhook_events WHERE provider=%s AND event_key=%s",
+            ("lemonsqueezy", "id:evt-order-plus-1"),
+        )
+    assert row == {"status": "succeeded"}
+
+
+def test_plus_order_still_honours_the_variant_allowlist(client, make_user):
+    """Sourcing the identity from first_order_item must not become a way in:
+    an order for a variant nobody approved is still rejected."""
+    cid = make_user()
+    order = _student_order(cid)
+    order["data"]["attributes"]["first_order_item"]["variant_id"] = "attacker-variant"
+
+    assert _post(client, order).status_code == 400
+    assert ssub.get_tier(cid) == "free"
+
+
+def test_subscription_payload_ignores_a_planted_first_order_item(client, make_user):
+    """Only order events read first_order_item. A subscription payload carrying
+    a rogue variant cannot launder it through an attached order item."""
+    cid = make_user()
+    event = _student_event("subscription_created", cid, "plus")
+    event["data"]["attributes"]["variant_id"] = "attacker-variant"
+    event["data"]["attributes"]["first_order_item"] = {
+        "product_id": cfg.LS_PRODUCT_STUDENT_PLUS,
+        "variant_id": cfg.LS_VARIANT_STUDENT_PLUS,
+    }
+
+    assert _post(client, event).status_code == 400
     assert ssub.get_tier(cid) == "free"
 
 

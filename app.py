@@ -4526,6 +4526,7 @@ def lemonsqueezy_webhook():
         "subscription_payment_recovered",
         "subscription_payment_refunded",
     }
+    order_events = {"order_created", "order_refunded"}
     provider_subscription_id = str(
         (attrs.get("subscription_id") if event_name in payment_events else data.get("id"))
         or ""
@@ -4603,8 +4604,18 @@ def lemonsqueezy_webhook():
         except Exception:
             ssub = None
         requested_tier = str(custom.get("tier") or "plus").strip().lower()
-        variant_id = str(attrs.get("variant_id") or "")
-        product_id = str(attrs.get("product_id") or "")
+        # A checkout emits `order_created` alongside `subscription_created`, and
+        # its `data` is an order, not a subscription: the product and variant
+        # live in first_order_item — the coin-pack branch below reads them from
+        # there for exactly this reason — while `data.id` is an order id. Read
+        # only the subscription-shaped fields and both come back empty, no
+        # identity can match, and the event is rejected 400 and parked at
+        # `failed` for good. The entitlement itself is fine (subscription_created
+        # grants it), but the dead row holds /health/operations degraded, which
+        # pages the uptime monitor every five minutes until someone clears it.
+        identity_attrs = first_order_item if event_name in order_events else attrs
+        variant_id = str(identity_attrs.get("variant_id") or "")
+        product_id = str(identity_attrs.get("product_id") or "")
         store_id = str(attrs.get("store_id") or "")
         product_name = str(attrs.get("product_name") or "").strip().lower()
         expected_variant = str(
