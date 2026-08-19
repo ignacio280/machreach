@@ -5,6 +5,7 @@ Compression must never change what the client ends up parsing, and must not
 run before the CSP pass that rewrites the HTML body.
 """
 import gzip
+import re
 
 
 def _both(client, path):
@@ -25,15 +26,24 @@ def test_declared_length_matches_compressed_body(client):
 
 
 def test_compression_preserves_the_document(client):
-    """Decompressed bytes must equal the identity response, modulo the
-    per-response CSP nonce, which is regenerated on every request."""
+    """Decompressed bytes must equal the identity response, modulo the values
+    that are minted per request: the CSP nonce and the CSRF token."""
     plain, gz = _both(client, "/login")
     decoded = gzip.decompress(gz.get_data()).decode("utf-8")
 
     def normalize(body, response):
         nonce = response.headers["Content-Security-Policy"].split("'nonce-")[1].split("'")[0]
         assert nonce in body, "CSP nonce missing from body"
-        return body.replace(nonce, "NONCE")
+        body = body.replace(nonce, "NONCE")
+        # The CSRF token is signed with the time it was minted, so two requests
+        # that straddle a second legitimately carry different tokens. Comparing
+        # them made this test fail on the clock rather than on compression.
+        token = re.search(r'name="csrf_token" value="([^"]+)"', body)
+        assert token, "CSRF token missing from body"
+        body = body.replace(token.group(1), "CSRF")
+        # The same token is embedded again, base64-encoded, in the bootstrap
+        # payload, where a substring replace cannot reach it.
+        return re.sub(r'atob\("[^"]*"\)', 'atob("PAYLOAD")', body)
 
     assert normalize(decoded, gz) == normalize(plain.get_data(as_text=True), plain)
 
