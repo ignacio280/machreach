@@ -196,6 +196,66 @@ def test_abandoning_a_terminal_webhook_clears_the_alert(monkeypatch):
     assert row["status"] == "abandoned"
 
 
+def test_deploy_settles_order_events_the_handler_could_never_accept(monkeypatch):
+    """The predeploy migration clears this class on its own: before the handler
+    read first_order_item, no Plus `order_created` could pass the identity
+    check, so every such row is the bug rather than a real rejection — and the
+    operator has no shell handy when the monitor starts paging."""
+    from machreach_core.db import _exec, _fetchone, get_db, settle_unmatchable_order_events
+
+    _clear_operational_state()
+    _configure_dependencies(monkeypatch)
+    record_worker_heartbeat()
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO webhook_events (provider, event_key, event_name, status, last_error) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            ("lemonsqueezy", "id:order-1", "order_created", "failed",
+             "unapproved-subscription-variant"),
+        )
+    assert collect_operational_health()["checks"]["failed_webhooks"]["status"] == "alert"
+
+    assert settle_unmatchable_order_events() == 1
+
+    assert collect_operational_health()["checks"]["failed_webhooks"]["count"] == 0
+    with get_db() as db:
+        row = _fetchone(
+            db, "SELECT status FROM webhook_events WHERE event_key = %s", ("id:order-1",)
+        )
+    assert row["status"] == "abandoned"
+    # Idempotent: a second deploy finds nothing left to settle.
+    assert settle_unmatchable_order_events() == 0
+
+
+def test_deploy_leaves_a_genuinely_rejected_subscription_variant_alone(monkeypatch):
+    """Same error string, different event: a subscription rejected for a variant
+    nobody approved means someone may have paid for something the product does
+    not know about. That one keeps paging."""
+    from machreach_core.db import _exec, _fetchone, get_db, settle_unmatchable_order_events
+
+    _clear_operational_state()
+    _configure_dependencies(monkeypatch)
+    record_worker_heartbeat()
+    with get_db() as db:
+        _exec(
+            db,
+            "INSERT INTO webhook_events (provider, event_key, event_name, status, last_error) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            ("lemonsqueezy", "id:sub-rogue", "subscription_created", "failed",
+             "unapproved-subscription-variant"),
+        )
+
+    assert settle_unmatchable_order_events() == 0
+
+    assert collect_operational_health()["checks"]["failed_webhooks"]["status"] == "alert"
+    with get_db() as db:
+        row = _fetchone(
+            db, "SELECT status FROM webhook_events WHERE event_key = %s", ("id:sub-rogue",)
+        )
+    assert row["status"] == "failed"
+
+
 def test_resolve_script_refuses_to_close_every_failed_event(monkeypatch):
     from machreach_core.db import _exec, get_db
     from scripts.resolve_failed_webhooks import main as resolve

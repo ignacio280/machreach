@@ -619,6 +619,47 @@ def finish_webhook_event(provider: str, event_key: str, *, error: str = "") -> N
         )
 
 
+def settle_unmatchable_order_events() -> int:
+    """Close out order events the subscription handler could never have accepted.
+
+    Until the handler learned to read an order payload's product and variant
+    from `first_order_item`, every `order_created` that belonged to a Plus
+    checkout was rejected as `unapproved-subscription-variant` — not because the
+    variant was wrong, but because the field it looked in does not exist on an
+    order. No order event grants anything (the entitlement rides on
+    `subscription_created`), and the provider stops retrying after three
+    attempts, so those rows sit at `failed` forever and hold
+    /health/operations degraded.
+
+    Scoped deliberately: only order events, only that error. A subscription
+    payload rejected for a genuinely unapproved variant is a real alert and is
+    left exactly where it is. Idempotent — once the rows are `abandoned` there
+    is nothing left to match.
+    """
+    with get_db() as db:
+        rows = _fetchall(
+            db,
+            "SELECT event_key FROM webhook_events "
+            "WHERE provider = 'lemonsqueezy' AND status = 'failed' "
+            "AND event_name IN ('order_created', 'order_refunded') "
+            "AND last_error LIKE %s",
+            ("%unapproved-subscription-variant%",),
+        )
+        if not rows:
+            return 0
+        keys = [row["event_key"] for row in rows]
+        _exec(
+            db,
+            "UPDATE webhook_events SET status = 'abandoned' "
+            "WHERE provider = 'lemonsqueezy' AND event_key IN ("
+            + ",".join(["%s"] * len(keys))
+            + ")",
+            tuple(keys),
+        )
+    record_operational_event("billing_webhook_abandoned", "unmatchable_order_event")
+    return len(keys)
+
+
 def record_operational_event(event_type: str, source: str = "") -> None:
     """Record a non-sensitive operational signal for health checks and alerts."""
     with get_db() as db:
