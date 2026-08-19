@@ -74,8 +74,15 @@
 .stat-v{font-family:var(--font-display);font-weight:800;font-size:clamp(32px,3.6vw,46px);letter-spacing:-.035em;color:var(--brand)}
 .stat:nth-child(2) .stat-v{color:var(--plum)}.stat:nth-child(3) .stat-v{color:var(--sky)}.stat:nth-child(4) .stat-v{color:var(--good)}
 .stat-l{color:var(--ink-2);font-size:13.5px;font-weight:700;margin-top:6px}
-.stats-beta{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;text-align:center;background:var(--surface);border:var(--bd);border-radius:var(--r);padding:20px 24px;box-shadow:var(--sh1)}
-.stats-beta p{margin:0;color:var(--ink-2);font-size:15px;font-weight:700;max-width:52ch}
+/* Banner E (design project, "MachReach Banner"): the under-the-floor stand-in
+   for the stats strip. The track holds four identical copies and travels half
+   its own width, so the seam never arrives. prefers-reduced-motion is already
+   handled globally in theme.css, which parks the track at its start. */
+.marq{display:flex;align-items:center;background:var(--brand);border:var(--bd);border-radius:var(--r-lg);box-shadow:var(--sh2);overflow:hidden;height:78px}
+.marq-track{display:flex;white-space:nowrap;animation:marq-slide 18s linear infinite}
+.marq-track span{display:inline-flex;align-items:center;gap:22px;padding-right:22px;font-family:var(--font-display);font-weight:800;font-size:24px;letter-spacing:-.01em;color:#fff}
+.marq-star{font-style:normal;font-size:20px;color:var(--amber)}
+@keyframes marq-slide{to{transform:translateX(-50%)}}
 
 /* ---------- features ---------- */
 .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
@@ -288,8 +295,9 @@
   .plan-grid{grid-template-columns:repeat(2,1fr);gap:10px}
   .plan-cell{font-size:13px;padding:13px 8px}
   .container{padding:0 18px}
-  .stats-beta{padding:16px 18px;gap:10px}
-  .stats-beta p{font-size:14px}
+  .marq{height:62px}
+  .marq-track span{font-size:18px;gap:16px;padding-right:16px}
+  .marq-star{font-size:15px}
 }
 
 /* ---------- analítica de estudio (own section) ---------- */

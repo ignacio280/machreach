@@ -78,12 +78,17 @@ def test_stats_strip_hides_thin_numbers_behind_the_beta_band():
     )
     assert int(floor.split("=")[1].strip(" ;")) >= 150, floor
     assert "live.students_week < STATS_MIN_STUDENTS" in features
-    # Under the floor: the band, and no figure anywhere inside it.
-    assert 'className="stats-beta pop in"' in features
-    assert "Cada lunes el ranking vuelve a cero" in features
+    # Under the floor: banner E, and no figure anywhere inside it.
+    assert 'className="marq-track"' in features
+    assert "El ranking se reinicia el lunes" in features
+    assert "Parte primero en tu universidad" in features
 
     ui = (LANDING / "v6/ui.css").read_text(encoding="utf-8")
-    assert ".stats-beta{" in ui
+    assert ".marq{" in ui
+    # The loop only reads as continuous while the copy count and the travel
+    # distance agree: four copies, half the track's width.
+    assert "[0, 1, 2, 3].map(line)" in features
+    assert "@keyframes marq-slide{to{transform:translateX(-50%)}}" in ui
 
 
 def test_intro_is_remembered_and_respects_reduced_motion():

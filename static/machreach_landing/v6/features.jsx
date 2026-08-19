@@ -33,12 +33,21 @@ function StatsStrip() {
   if (!live || live.students_week < STATS_MIN_STUDENTS) {
     // No count is honest enough to print yet, so sell the thing that is true
     // whatever the count is: the ranking restarts on Monday and starts empty.
+    // Banner E from the design project — a ticker, so the promise still moves
+    // without a figure in it. Copies 2-4 exist only so the loop has something
+    // to scroll into; one is enough for a reader, and for a screen reader.
+    const line = (i) => (
+      <span key={i} aria-hidden={i ? "true" : undefined}>
+        El ranking se reinicia el lunes <i className="marq-star">✦</i>
+        Parte primero en tu universidad <i className="marq-star">✦</i>
+        Beta abierta <i className="marq-star">✦</i>
+      </span>
+    );
     return (
       <section style={{ paddingTop: 0 }}>
         <div className="container">
-          <div className="stats-beta pop in">
-            <span className="tagchip"><i className="live-dot" /> beta abierta</span>
-            <p>Cada lunes el ranking vuelve a cero. Entra ahora y parte primero en el de tu universidad.</p>
+          <div className="marq">
+            <div className="marq-track">{[0, 1, 2, 3].map(line)}</div>
           </div>
         </div>
       </section>
