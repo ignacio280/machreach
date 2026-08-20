@@ -44,20 +44,18 @@ def test_legacy_scalar_canvas_connect_token_remains_version_checked(monkeypatch)
 
 def test_docx_and_pdf_text_extraction_succeeds():
     from docx import Document
-    from pypdf import PdfWriter
+    from pdf_fixtures import STUDY_MATERIAL, text_pdf
 
     document = Document()
     document.add_paragraph("MachReach document extraction")
     docx_bytes = io.BytesIO()
     document.save(docx_bytes)
 
-    writer = PdfWriter()
-    writer.add_blank_page(width=200, height=200)
-    pdf_bytes = io.BytesIO()
-    writer.write(pdf_bytes)
+    extracted = extract_text_from_pdf(text_pdf([STUDY_MATERIAL[:70]]))
 
     assert "MachReach document extraction" in extract_text_from_docx(docx_bytes.getvalue())
-    assert "TOTAL PAGES: 1" in extract_text_from_pdf(pdf_bytes.getvalue())
+    assert "TOTAL PAGES: 1" in extracted
+    assert "Carnot cycle" in extracted
 
 
 def test_i18n_translation_helpers_cover_visible_text_and_attributes(flask_app):

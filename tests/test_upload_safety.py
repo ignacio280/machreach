@@ -10,9 +10,11 @@ from student import canvas as canvas_mod
 from student.canvas import (
     MAX_DOCUMENT_BYTES,
     MAX_PDF_PAGES,
+    NoTextLayer,
     extract_text_from_docx,
     extract_text_from_pdf,
 )
+from pdf_fixtures import STUDY_MATERIAL, scanned_pdf, text_pdf
 
 
 def test_oversized_pdf_is_rejected_before_parsing():
@@ -34,25 +36,43 @@ def test_pdf_page_limit_is_enforced_before_text_extraction():
 
 
 def test_pdf_page_failure_is_isolated_and_bulk_fallback_is_safe(monkeypatch):
-    from pypdf import PdfWriter
     import pdfminer.high_level
 
-    writer = PdfWriter()
-    writer.add_blank_page(width=72, height=72)
-    payload = io.BytesIO()
-    writer.write(payload)
+    payload = scanned_pdf(pages=2)
 
-    def fail_page(*args, **kwargs):
-        raise RuntimeError("malformed page")
+    def one_bad_page(stream, buf, page_numbers=None, **kwargs):
+        if page_numbers == [0]:
+            raise RuntimeError("malformed page")
+        buf.write(STUDY_MATERIAL)
 
-    monkeypatch.setattr(pdfminer.high_level, "extract_text_to_fp", fail_page)
-    page_result = extract_text_from_pdf(payload.getvalue())
-    assert "TOTAL PAGES: 1" in page_result
-    assert "--- PAGE 1 of 1 ---" in page_result
+    monkeypatch.setattr(pdfminer.high_level, "extract_text_to_fp", one_bad_page)
+    page_result = extract_text_from_pdf(payload)
+    assert "TOTAL PAGES: 2" in page_result
+    assert "--- PAGE 1 of 2 ---" in page_result
+    # The unreadable page is skipped, not fatal: page two still comes through.
+    assert "Carnot cycle" in page_result
 
     monkeypatch.setattr(canvas_mod, "MAX_PDF_PAGES", 0)
     with pytest.raises(ValueError, match="too many pages"):
-        extract_text_from_pdf(payload.getvalue())
+        extract_text_from_pdf(payload)
+
+
+def test_pdf_of_scanned_pages_is_refused_rather_than_returned_as_page_markers():
+    """Page markers are scaffolding this module adds, not document content.
+
+    Returning them for a scan made an image-only PDF look like a successfully
+    read document that happened to say nothing, and the quiz generator built a
+    quiz about nothing out of it.
+    """
+    with pytest.raises(NoTextLayer):
+        extract_text_from_pdf(scanned_pdf(pages=12))
+
+    with pytest.raises(NoTextLayer):
+        extract_text_from_pdf(scanned_pdf(pages=1))
+
+    readable = extract_text_from_pdf(text_pdf([STUDY_MATERIAL[:70], STUDY_MATERIAL[70:140]]))
+    assert "Carnot cycle" in readable
+    assert "--- PAGE 2 of 2 ---" in readable
 
 
 def test_pdf_falls_back_when_page_count_dependency_is_unavailable(monkeypatch):
@@ -69,10 +89,10 @@ def test_pdf_falls_back_when_page_count_dependency_is_unavailable(monkeypatch):
     monkeypatch.setattr(
         pdfminer.high_level,
         "extract_text",
-        lambda stream: "safe bulk fallback",
+        lambda stream: "safe bulk fallback. " + STUDY_MATERIAL,
     )
 
-    assert extract_text_from_pdf(b"%PDF fallback") == "safe bulk fallback"
+    assert "safe bulk fallback" in extract_text_from_pdf(b"%PDF fallback")
 
 
 def test_pdf_returns_empty_when_optional_extractors_are_unavailable(monkeypatch):

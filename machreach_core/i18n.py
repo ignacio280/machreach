@@ -130,6 +130,12 @@ TRANSLATIONS = {
     "student_ui.tools": {"en": "Tools", "es": "Herramientas"},
     "student_ui.reviews": {"en": "Reviews", "es": "Reviews"},
     "student_ui.study": {"en": "Study", "es": "Estudio"},
+    "student_ui.pdf_has_no_text_layer": {
+        "en": "This PDF has no selectable text \u2014 its pages are scanned images. "
+              "Upload a version with real text, or paste the material instead.",
+        "es": "Este PDF no tiene texto seleccionable: sus p\u00e1ginas son im\u00e1genes escaneadas. "
+              "Sube una versi\u00f3n con texto real, o pega el material a mano.",
+    },
     "student_ui.quizzes": {"en": "Quizzes", "es": "Quizzes"},
     "student_ui.flashcards": {"en": "Flashcards", "es": "Tarjetas"},
     "student_ui.quiz_job_in_progress": {

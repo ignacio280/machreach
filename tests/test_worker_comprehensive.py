@@ -3,6 +3,7 @@ import runpy
 from machreach_core import lemonsqueezy
 from machreach_core.db import claim_async_jobs, enqueue_async_job, get_async_job_status
 from student import ai_usage, analyzer, db as sdb, subscription
+from pdf_fixtures import STUDY_MATERIAL
 
 
 def _claim_job_for(job_type, client_id):
@@ -68,7 +69,7 @@ def test_ad_hoc_quiz_job_succeeds_and_persists_questions(monkeypatch, make_user)
         "option_c": "C", "option_d": "D", "correct": "a", "explanation": "Because",
     }])
     job = {"job_key": str(client_id), "input": {
-        "source_text": "Course material", "title": "Custom Quiz", "difficulty": "impossible", "count": "bad",
+        "source_text": STUDY_MATERIAL, "title": "Custom Quiz", "difficulty": "impossible", "count": "bad",
     }}
 
     worker._process_student_quiz_job(job)
@@ -145,7 +146,7 @@ def test_ad_hoc_flashcard_job_succeeds_and_failure_is_recorded(monkeypatch, make
     monkeypatch.setattr(analyzer, "generate_flashcards", lambda **kwargs: [{"front": "Q", "back": "A"}])
 
     worker._process_student_flashcard_job({"job_key": str(client_id), "input": {
-        "source_text": "Material", "title": "Custom Cards", "count": "bad",
+        "source_text": STUDY_MATERIAL, "title": "Custom Cards", "count": "bad",
     }})
     status = get_async_job_status("student_flashcard_generation", str(client_id))
     assert status["status"] == "done"
@@ -174,11 +175,11 @@ def test_ai_worker_generation_failures_remain_retryable(monkeypatch, make_user):
 
     worker._process_student_quiz_job({
         "job_key": str(quiz_client),
-        "input": {"source_text": "material"},
+        "input": {"source_text": STUDY_MATERIAL},
     })
     worker._process_student_flashcard_job({
         "job_key": str(cards_client),
-        "input": {"source_text": "material"},
+        "input": {"source_text": STUDY_MATERIAL},
     })
 
     assert get_async_job_status(
@@ -697,7 +698,7 @@ def test_course_material_quiz_and_flashcard_jobs_use_uploaded_sources(monkeypatc
         course_id,
         "reactions.txt",
         "txt",
-        "Substitution reactions replace one functional group with another.",
+        "Substitution reactions replace one functional group with another. " + STUDY_MATERIAL,
     )
     enqueue_async_job("student_quiz_generation", str(client_id), input_payload={})
     enqueue_async_job("student_flashcard_generation", str(client_id), input_payload={})
@@ -801,7 +802,7 @@ def test_a_second_quiz_job_generates_a_new_quiz_instead_of_replaying_the_first(
         enqueue_async_job(
             "student_quiz_generation",
             str(client_id),
-            input_payload={"source_text": f"Material from {title}", "title": title, "count": 1},
+            input_payload={"source_text": f"{title}: {STUDY_MATERIAL}", "title": title, "count": 1},
         )
         job = _claim_job_for("student_quiz_generation", client_id)
         worker._process_student_quiz_job(job)
@@ -827,7 +828,7 @@ def test_a_second_flashcard_job_builds_a_new_deck_instead_of_replaying_the_first
         enqueue_async_job(
             "student_flashcard_generation",
             str(client_id),
-            input_payload={"source_text": f"Material from {title}", "title": title, "count": 1},
+            input_payload={"source_text": f"{title}: {STUDY_MATERIAL}", "title": title, "count": 1},
         )
         job = _claim_job_for("student_flashcard_generation", client_id)
         worker._process_student_flashcard_job(job)
@@ -836,3 +837,41 @@ def test_a_second_flashcard_job_builds_a_new_deck_instead_of_replaying_the_first
         deck_ids.append(status["deck_id"])
 
     assert deck_ids[0] != deck_ids[1]
+
+
+
+def test_quiz_job_refuses_material_that_is_only_extraction_scaffolding(
+    monkeypatch, make_user
+):
+    """Course files saved before extraction rejected scans still hold markers.
+
+    The page markers are ours, so this reads as a three-page document that
+    says nothing. Generating from it produced a confident quiz about material
+    the student never uploaded, which looks like the product working.
+    """
+    client_id = make_user("Scanned Material Worker")
+    course_id = sdb.create_manual_course(client_id, "Historia", "HIS-101")
+    sdb.add_course_file(
+        client_id,
+        course_id,
+        "escaneo.pdf",
+        "pdf",
+        '[PDF DOCUMENT — TOTAL PAGES: 3]\n\n--- PAGE 1 of 3 ---\n\n--- PAGE 2 of 3 ---\n\n--- PAGE 3 of 3 ---',
+    )
+    monkeypatch.setattr(subscription, "can_generate_quiz_today", lambda cid: (True, ""))
+    monkeypatch.setattr(subscription, "cap_questions", lambda cid, count: count)
+    monkeypatch.setattr(
+        analyzer,
+        "generate_quiz",
+        lambda **kwargs: (_ for _ in ()).throw(
+            AssertionError("must not generate from an empty document")
+        ),
+    )
+
+    worker._process_student_quiz_job(
+        {"job_key": str(client_id), "input": {"course_id": course_id}}
+    )
+
+    status = get_async_job_status("student_quiz_generation", str(client_id))
+    assert status["status"] == "error"
+    assert "scanned PDF" in status["error"]

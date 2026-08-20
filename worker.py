@@ -60,6 +60,24 @@ def process_leaderboard_payouts() -> None:
 
 
 
+def _require_enough_material(text: str) -> str:
+    """Refuse to generate from material that says nothing.
+
+    A scanned PDF saved before extraction learned to reject them still sits in
+    course material as page markers and no content. Handed that, the model
+    writes a confident quiz about material the student never uploaded, which
+    is worse than an error: it looks like the product working.
+    """
+    from student.canvas import MIN_SOURCE_TEXT_CHARS, readable_text_length
+
+    if readable_text_length(text) < MIN_SOURCE_TEXT_CHARS:
+        raise ValueError(
+            "This material has almost no readable text. If it is a scanned PDF "
+            "(pages that are images), upload a version with selectable text."
+        )
+    return text
+
+
 def _set_quiz_job_status(client_id: int, status: str, progress: str = "", **payload):
     error = str(payload.pop("error", "") or "")
     set_async_job_status(
@@ -117,6 +135,7 @@ def _process_student_quiz_job(job: dict):
 
         if ad_hoc_source:
             course_name = ad_hoc_title or "Custom Material"
+            _require_enough_material(ad_hoc_source)
             questions = generate_quiz(
                 course_name=course_name,
                 topics=topics or None,
@@ -144,6 +163,7 @@ def _process_student_quiz_job(job: dict):
                     source_text += n["content_html"] + "\n\n"
             if not source_text.strip():
                 raise ValueError("No files uploaded for this course/exam. Please upload your study material first.")
+            _require_enough_material(source_text)
             questions = generate_quiz(
                 course_name=course["name"],
                 topics=topics or None,
@@ -278,6 +298,7 @@ def _process_student_flashcard_job(job: dict):
                     "No files uploaded for this course/exam. Please upload your study material first."
                 )
 
+        _require_enough_material(source_text)
         cards = generate_flashcards(
             course_name=course_name,
             topics=topics or None,

@@ -952,7 +952,7 @@ def register_student_routes(app, csrf, limiter):
 
     # Import here to avoid circular imports at module level
 
-    from student.canvas import extract_text_from_pdf, extract_text_from_docx, make_connect_token, revoke_connect_tokens, verify_connect_token
+    from student.canvas import NoTextLayer, extract_text_from_pdf, extract_text_from_docx, make_connect_token, revoke_connect_tokens, verify_connect_token
 
     from student.analyzer import (generate_flashcards, generate_quiz)
 
@@ -2541,6 +2541,12 @@ def register_student_routes(app, csrf, limiter):
                 else:
                     text = content.decode("utf-8", errors="ignore")
                     file_type = "txt"
+            except NoTextLayer:
+                from machreach_core.i18n import t as _t
+                return jsonify({
+                    "error": _t("student_ui.pdf_has_no_text_layer"),
+                    "no_text_layer": True,
+                }), 400
             except Exception as e:
                 return jsonify({"error": f"No se pudo leer el archivo: {e}"}), 400
             name = title or fname
@@ -15725,6 +15731,18 @@ No markdown, no code fences. ONLY JSON.
                 except Exception:
 
                     text = ""
+
+        except NoTextLayer:
+
+            # The file parsed fine and is not empty: its pages are pictures.
+            # Saying "could not extract text" sends students hunting for a
+            # corrupt file instead of exporting a PDF with a text layer.
+            from machreach_core.i18n import t as _t
+
+            return jsonify({
+                "error": _t("student_ui.pdf_has_no_text_layer"),
+                "no_text_layer": True,
+            }), 400
 
         except Exception as e:
 

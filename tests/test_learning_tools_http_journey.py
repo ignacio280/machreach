@@ -5,6 +5,7 @@ from io import BytesIO
 from types import SimpleNamespace
 
 from machreach_core.db import _exec, get_db
+from pdf_fixtures import STUDY_MATERIAL, scanned_pdf, text_pdf
 from student import ai_usage, analyzer, db as sdb, subscription
 
 
@@ -349,3 +350,27 @@ def test_extract_file_validation_and_text_success(
     )
     assert extracted.status_code == 200
     assert extracted.get_json()["title"] == "notes"
+
+    # A phone scan of handwritten notes: real file, real pages, no text layer.
+    # This used to return 200 with a page marker per page, and the quiz built
+    # from it was about nothing the student had uploaded.
+    scanned = client.post(
+        "/api/student/extract-file",
+        data={"file": (BytesIO(scanned_pdf(pages=6)), "apuntes.pdf")},
+        content_type="multipart/form-data",
+    )
+    assert scanned.status_code == 400
+    assert scanned.get_json()["no_text_layer"] is True
+
+    readable_pdf = client.post(
+        "/api/student/extract-file",
+        data={
+            "file": (
+                BytesIO(text_pdf([STUDY_MATERIAL[:70], STUDY_MATERIAL[70:140]])),
+                "apuntes.pdf",
+            )
+        },
+        content_type="multipart/form-data",
+    )
+    assert readable_pdf.status_code == 200
+    assert "Carnot cycle" in readable_pdf.get_json()["text"]

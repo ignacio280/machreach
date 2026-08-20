@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import io
 import logging
+import re
 import zipfile
 
 
@@ -19,6 +20,38 @@ MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 MAX_PDF_PAGES = 200
 MAX_EXTRACTED_CHARS = 250_000
 MAX_DOCX_UNCOMPRESSED_BYTES = 25 * 1024 * 1024
+# A scan has no text layer, but the page markers below still make its
+# extraction look full. These two thresholds together separate "photographs of
+# pages" from "a genuinely short document": a real page carries far more than
+# the stray page number a scanner leaves behind.
+MIN_TEXT_LAYER_CHARS = 200
+MIN_TEXT_LAYER_CHARS_PER_PAGE = 20
+# Below this there is nothing to build questions from, and a model handed an
+# empty document invents a generic one instead of saying so.
+MIN_SOURCE_TEXT_CHARS = 200
+
+_SCAFFOLDING_RE = re.compile(
+    r"^(?:\[PDF DOCUMENT — TOTAL PAGES: \d+\]|--- PAGE \d+ of \d+ ---)\s*$",
+    re.MULTILINE,
+)
+
+
+class NoTextLayer(ValueError):
+    """The document parsed cleanly but carries no extractable text.
+
+    Almost always a scan: the pages are images, so a text extractor finds
+    nothing. Callers must not read this as "the student uploaded nothing" —
+    they uploaded a real file, and need to be told it has no text layer.
+    """
+
+
+def readable_text_length(text: str) -> int:
+    """Characters of actual material, ignoring extraction scaffolding.
+
+    The page markers are ours, not the document's, so a 40-page scan can carry
+    a thousand characters and still say nothing at all.
+    """
+    return len(_SCAFFOLDING_RE.sub("", text or "").strip())
 
 # ── Browser-extension "connect" token ──────────────────────────────────────
 # The Focus Guard extension can read a student's Canvas course list from their
@@ -122,6 +155,7 @@ def extract_text_from_pdf(content: bytes) -> str:
         pass
 
     # First, try pdfminer page-by-page so we can insert real page markers.
+    pages_text = None
     try:
         from pdfminer.high_level import extract_text_to_fp
         from pdfminer.layout import LAParams
@@ -135,26 +169,44 @@ def extract_text_from_pdf(content: bytes) -> str:
                 pages_text.append(buf.getvalue().strip())
             except Exception:
                 pages_text.append("")
+    except ImportError:
+        pages_text = None
+    except Exception as e:
+        log.warning("Per-page PDF extraction failed, falling back: %s", e)
+        pages_text = None
+
+    if pages_text is not None:
+        _reject_scan(sum(len(page) for page in pages_text), total_pages)
         body = "\n\n".join(
             f"--- PAGE {i+1} of {total_pages} ---\n{txt}" for i, txt in enumerate(pages_text)
         )
         header = f"[PDF DOCUMENT — TOTAL PAGES: {total_pages}]\n\n"
         return (header + body).strip()[:MAX_EXTRACTED_CHARS]
-    except ImportError:
-        pass
-    except Exception as e:
-        log.warning("Per-page PDF extraction failed, falling back: %s", e)
+
     # Fallback: bulk pdfminer (no page markers)
     try:
         from pdfminer.high_level import extract_text as _pdfminer_extract
-        text = _pdfminer_extract(io.BytesIO(content))
-        return (text or "").strip()[:MAX_EXTRACTED_CHARS]
+        text = (_pdfminer_extract(io.BytesIO(content)) or "").strip()[:MAX_EXTRACTED_CHARS]
     except ImportError:
         log.warning("pdfminer.six not installed — skipping PDF extraction")
         return ""
     except Exception as e:
         log.warning("PDF extraction failed: %s", e)
         return ""
+    _reject_scan(len(text), total_pages)
+    return text
+
+
+def _reject_scan(found_chars: int, total_pages: int | None) -> None:
+    """Refuse a PDF whose pages are images rather than text.
+
+    Without this the extraction still returns one page marker per page, which
+    reads downstream as a real document that happens to say nothing — and a
+    model handed an empty document writes a generic quiz rather than failing.
+    """
+    per_page_floor = MIN_TEXT_LAYER_CHARS_PER_PAGE * max(1, total_pages or 1)
+    if found_chars < MIN_TEXT_LAYER_CHARS and found_chars < per_page_floor:
+        raise NoTextLayer("This PDF has no selectable text; its pages are images.")
 
 
 def extract_text_from_docx(content: bytes) -> str:
