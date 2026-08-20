@@ -155,7 +155,7 @@ def extract_text_from_pdf(content: bytes) -> str:
         pass
 
     # First, try pdfminer page-by-page so we can insert real page markers.
-    pages_text = None
+    pages_text: list[str] | None = None
     try:
         from pdfminer.high_level import extract_text_to_fp
         from pdfminer.layout import LAParams
