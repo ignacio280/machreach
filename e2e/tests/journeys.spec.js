@@ -162,7 +162,14 @@ test("AI generation completes through the web queue and worker", async ({ page }
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        source_text: "Velocity is distance divided by time.",
+        // Long enough to clear the "is there anything to build questions
+        // from?" floor: a shorter string is treated as an empty document.
+        source_text:
+          "Velocity is distance divided by time, and acceleration is the rate " +
+          "at which velocity changes. Newton's second law relates the net force " +
+          "on a body to its mass and its acceleration. Momentum is conserved in " +
+          "an isolated system, which is why a collision can be solved without " +
+          "knowing the forces acting during the impact.",
         title: "Physics foundations",
         count: 5,
       }),
