@@ -109,6 +109,41 @@ def test_operational_health_detects_stale_queue_exhausted_jobs_and_provider_fail
     assert snapshot["checks"]["smtp_failures"]["count"] == 1
 
 
+def test_exhausted_verification_job_stops_alerting_once_nothing_is_left_to_do(
+    monkeypatch, make_user
+):
+    """Mirror of the 2026-08-21 uptime incident: a verification email burned
+    its retries during a mail outage, the person got in some other way, and the
+    dead job held /health/operations degraded on every probe after that."""
+    _clear_operational_state()
+    _configure_dependencies(monkeypatch)
+    record_worker_heartbeat()
+    from machreach_core.db import (
+        claim_async_jobs,
+        mark_email_verified,
+        reconcile_orphaned_async_jobs,
+    )
+
+    provisioned_id = make_user("Provisioned By Operator")
+    deleted_id = 99887763  # account removed after the email never arrived
+    for key in (provisioned_id, deleted_id):
+        enqueue_async_job("verification_email", str(key), max_attempts=1)
+    claim_async_jobs("verification_email", limit=10)
+    for key in (provisioned_id, deleted_id):
+        fail_async_job("verification_email", str(key), "smtp down")
+
+    degraded = collect_operational_health()
+    assert degraded["status"] == "degraded"
+    assert degraded["checks"]["exhausted_retries"]["count"] == 2
+
+    mark_email_verified(provisioned_id)  # what scripts/provision_account.py does
+    assert reconcile_orphaned_async_jobs() == 1  # the deleted account's row
+
+    recovered = collect_operational_health()
+    assert recovered["checks"]["exhausted_retries"]["count"] == 0
+    assert recovered["status"] == "ok"
+
+
 def test_operational_probe_requires_secret(client, monkeypatch):
     _clear_operational_state()
     import app as appmod

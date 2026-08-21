@@ -6,6 +6,8 @@ from machreach_core.db import (
     get_async_job_status,
     get_db,
     list_async_jobs,
+    mark_email_verified,
+    reconcile_orphaned_async_jobs,
     record_worker_heartbeat,
     recover_stale_async_jobs,
     retry_async_job,
@@ -167,6 +169,56 @@ def test_each_enqueue_gets_its_own_run_id_but_a_retry_keeps_it():
     enqueue_async_job("run_id_queue", "job-1", input_payload={"x": 2})
     second = claim_async_jobs("run_id_queue", limit=1)[0]
     assert second["run_id"] != first["run_id"]
+
+
+def test_reconciliation_clears_only_exhausted_jobs_with_no_action_left(make_user):
+    """An exhausted job must keep alerting only while someone can still act."""
+    verified_id = make_user("Verified By Operator")
+    stuck_id = make_user("Still Unverified")
+    deleted_verification = 99887761  # no such account
+    deleted_generation = 99887762    # no such account either
+
+    for key in (verified_id, stuck_id, deleted_verification):
+        enqueue_async_job("verification_email", str(key), max_attempts=1)
+    enqueue_async_job("student_quiz_generation", str(deleted_generation), max_attempts=1)
+    claim_async_jobs("verification_email", limit=10)
+    claim_async_jobs("student_quiz_generation", limit=10)
+    for key in (verified_id, stuck_id, deleted_verification):
+        fail_async_job("verification_email", str(key), "smtp down")
+    fail_async_job("student_quiz_generation", str(deleted_generation), "provider down")
+
+    # Error rows that are not client-keyed, or whose key is not a client id,
+    # are none of the reconciler's business.
+    set_async_job_status("unrelated_type", "abc", "error", error="kept")
+    set_async_job_status("verification_email", "not-a-client", "error", error="kept")
+
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET email_verified = 1 WHERE id = %s", (verified_id,))
+
+    assert reconcile_orphaned_async_jobs() == 3
+    assert get_async_job_status("verification_email", str(verified_id))["status"] == "done"
+    assert get_async_job_status("verification_email", str(deleted_verification)) == {"status": "idle"}
+    assert get_async_job_status("student_quiz_generation", str(deleted_generation)) == {"status": "idle"}
+    assert get_async_job_status("verification_email", str(stuck_id))["status"] == "error"
+    assert get_async_job_status("unrelated_type", "abc")["status"] == "error"
+    assert get_async_job_status("verification_email", "not-a-client")["status"] == "error"
+
+    # A second pass finds nothing new.
+    assert reconcile_orphaned_async_jobs() == 0
+
+
+def test_marking_verified_settles_an_exhausted_delivery_job(make_user):
+    client_id = make_user("Eventually Verified")
+    enqueue_async_job("verification_email", str(client_id), max_attempts=1)
+    claim_async_jobs("verification_email", limit=10)
+    fail_async_job("verification_email", str(client_id), "smtp down")
+    assert get_async_job_status("verification_email", str(client_id))["status"] == "error"
+
+    mark_email_verified(client_id)
+
+    status = get_async_job_status("verification_email", str(client_id))
+    assert status["status"] == "done"
+    assert "error" not in status
 
 
 def test_a_job_queued_before_run_ids_existed_is_backfilled_on_claim():

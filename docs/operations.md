@@ -60,7 +60,12 @@ After rollback or recovery, verify both health endpoints, worker heartbeat, queu
 
 - Public `/health` non-200 and protected `/health/operations` degraded.
 - Worker heartbeat older than two minutes.
-- Oldest queued job over ten minutes or any job exhausting retries.
+- Oldest queued job over ten minutes or any job exhausting retries. An
+  exhausted job stops alerting on its own only when nothing is left to act on:
+  the worker settles verification deliveries for accounts verified another way
+  and drops failed jobs whose account was deleted. Anything else stays visible
+  until it is requeued from `/admin/jobs` (generation and verification jobs)
+  or resolved in an incident.
 - Failed webhook, billing reconciliation drift, or coin order without a completed ledger entry.
 - Outstanding partial-refund review or failed provider cancellation after a locally enforced full refund. After reconciling it in Lemon Squeezy, remove the corresponding `operational_events` row and record the action in the incident log.
 - Any AI reservation older than fifteen minutes or withheld referral reward reported by `/health/operations`.

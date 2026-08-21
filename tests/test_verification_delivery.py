@@ -77,6 +77,9 @@ def test_send_or_queue_and_worker_terminal_failure(monkeypatch):
 def test_stale_unverified_cleanup_preserves_verified_accounts(make_user):
     stale_id = make_user("Stale Unverified")
     verified_id = make_user("Old Verified")
+    # A failed delivery job must not outlive the account it was for, or it
+    # would hold /health/operations degraded with nothing left to act on.
+    delivery.send_or_queue(stale_id, lambda *_args: False)
     with get_db() as db:
         _exec(
             db,
@@ -97,3 +100,8 @@ def test_stale_unverified_cleanup_preserves_verified_accounts(make_user):
         assert _fetchval(
             db, "SELECT COUNT(*) FROM clients WHERE id = %s", (verified_id,)
         ) == 1
+        assert _fetchval(
+            db,
+            "SELECT COUNT(*) FROM async_jobs WHERE job_type = %s AND job_key = %s",
+            (delivery.JOB_TYPE, str(stale_id)),
+        ) == 0

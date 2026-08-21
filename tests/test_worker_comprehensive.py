@@ -335,6 +335,7 @@ def test_retired_subscription_cancellation_success_failure_and_exception(monkeyp
 def test_recover_worker_state_reports_recovered_jobs(monkeypatch):
     import machreach_core.db as dbmod
     monkeypatch.setattr(dbmod, "recover_stale_async_jobs", lambda: 2)
+    monkeypatch.setattr(dbmod, "reconcile_orphaned_async_jobs", lambda: 1)
     worker.recover_worker_state()
 
 

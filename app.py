@@ -3401,7 +3401,7 @@ def admin_jobs():
         if action == "retry_job":
             job_type = request.form.get("job_type", "").strip()
             job_key = request.form.get("job_key", "").strip()
-            if job_type not in {"student_quiz_generation", "student_flashcard_generation"} or not job_key:
+            if job_type not in {"student_quiz_generation", "student_flashcard_generation", "verification_email"} or not job_key:
                 error_msg = "Invalid job retry request."
             elif not _admin_secret_ok():
                 error_msg = "Confirm your password and MFA at /admin/reauth before this action."

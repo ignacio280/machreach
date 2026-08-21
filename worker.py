@@ -438,10 +438,16 @@ def cancel_retired_product_subscriptions():
 def recover_worker_state():
     """Recover interrupted student background jobs."""
     try:
-        from machreach_core.db import recover_stale_async_jobs
+        from machreach_core.db import (
+            recover_stale_async_jobs,
+            reconcile_orphaned_async_jobs,
+        )
         recovered = recover_stale_async_jobs()
         if recovered:
             print(f"[RECOVERY] jobs={recovered}")
+        settled = reconcile_orphaned_async_jobs()
+        if settled:
+            print(f"[RECOVERY] settled {settled} orphaned job(s)")
     except Exception as exc:
         print(f"[RECOVERY] failed: {type(exc).__name__}")
         try:

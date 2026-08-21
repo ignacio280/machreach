@@ -960,6 +960,61 @@ def recover_stale_async_jobs(stale_after_seconds: int = 3600) -> int:
     return int(exhausted or 0) + int(requeued or 0)
 
 
+# Job types whose job_key is a client id, so their fate can be reconciled
+# against the account they belong to.
+_CLIENT_KEYED_JOB_TYPES = (
+    "student_quiz_generation",
+    "student_flashcard_generation",
+    "verification_email",
+)
+
+
+def reconcile_orphaned_async_jobs() -> int:
+    """Settle failed jobs whose outcome can no longer matter.
+
+    A job that used up its retries stays at 'error' and holds
+    /health/operations degraded until someone acts, which is right while
+    acting is possible. Two cases have no action left: the account the job
+    belongs to has been deleted, and a verification email whose address was
+    verified some other way. Rows for deleted accounts are removed; moot
+    verification rows are settled as done. Everything else keeps alerting.
+    """
+    now = _now_expr()
+    cleared = 0
+    with get_db() as db:
+        placeholders = ",".join(["%s"] * len(_CLIENT_KEYED_JOB_TYPES))
+        rows = _fetchall(db, f"""
+            SELECT job_type, job_key FROM async_jobs
+            WHERE status = 'error' AND job_type IN ({placeholders})
+        """, _CLIENT_KEYED_JOB_TYPES)
+        for row in rows:
+            try:
+                client_id = int(row["job_key"])
+            except (TypeError, ValueError):
+                continue
+            client = _fetchone(
+                db, "SELECT email_verified FROM clients WHERE id = %s", (client_id,)
+            )
+            if client is None:
+                _exec(
+                    db,
+                    "DELETE FROM async_jobs WHERE job_type = %s AND job_key = %s",
+                    (row["job_type"], row["job_key"]),
+                )
+                cleared += 1
+            elif row["job_type"] == "verification_email" and client.get("email_verified"):
+                _exec(db, f"""
+                    UPDATE async_jobs
+                    SET status = 'done',
+                        progress = 'Verification no longer required.',
+                        error = '',
+                        updated_at = {now}
+                    WHERE job_type = %s AND job_key = %s
+                """, (row["job_type"], row["job_key"]))
+                cleared += 1
+    return cleared
+
+
 def fail_async_job(job_type: str, job_key: str, error: str, progress: str = "", payload=None, retry: bool = True) -> dict:
     """Record a job failure, requeueing it if retryable attempts remain."""
     payload_json = json.dumps(payload or {}, separators=(",", ":"))
@@ -1290,6 +1345,22 @@ def get_valid_verification_token(token: str) -> dict | None:
 
 
 def mark_email_verified(client_id: int):
+    now = _now_expr()
     with get_db() as db:
         _exec(db, "UPDATE clients SET email_verified = 1 WHERE id = %s", (client_id,))
         _exec(db, "UPDATE email_verification_tokens SET used = 1 WHERE client_id = %s", (client_id,))
+        # A verified address has nothing left to deliver, however it got
+        # verified: the emailed link, a resend, or an operator running
+        # scripts/provision_account.py. Settling the delivery job here keeps a
+        # run that exhausted its retries from holding /health/operations
+        # degraded after the account is already in.
+        _exec(db, f"""
+            UPDATE async_jobs
+            SET status = 'done',
+                progress = 'Verification no longer required.',
+                error = '',
+                updated_at = {now}
+            WHERE job_type = 'verification_email'
+              AND job_key = %s
+              AND status <> 'done'
+        """, (str(client_id),))

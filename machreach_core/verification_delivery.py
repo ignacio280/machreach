@@ -98,5 +98,13 @@ def delete_stale_unverified(days: int = 7) -> int:
         for client_id in ids:
             _exec(db, "DELETE FROM email_verification_tokens WHERE client_id = %s", (client_id,))
             _exec(db, "DELETE FROM password_reset_tokens WHERE client_id = %s", (client_id,))
+            # The delivery job goes with the account: a run that exhausted its
+            # retries would otherwise alert on /health/operations forever for
+            # an address that no longer exists.
+            _exec(
+                db,
+                "DELETE FROM async_jobs WHERE job_type = %s AND job_key = %s",
+                (JOB_TYPE, str(client_id)),
+            )
             _exec(db, "DELETE FROM clients WHERE id = %s", (client_id,))
     return len(ids)
