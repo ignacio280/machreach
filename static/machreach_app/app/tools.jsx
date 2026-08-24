@@ -82,7 +82,7 @@ function FlashcardsTab({ data = {} }) {
 }
 
 function QuizzesTab({ plus, data = {} }) {
-  const quizzes = data.quizzes || QUIZZES;
+  const [quizzes, setQuizzes] = React.useState(data.quizzes || QUIZZES);
   const [mode, setMode] = React.useState("test");
   const [status, setStatus] = React.useState("");
   const fileInput = React.useRef(null);
@@ -105,6 +105,18 @@ function QuizzesTab({ plus, data = {} }) {
       markGenerationQueued("quiz");
       setStatus("Quiz en proceso. Puedes seguir navegando: te avisamos cuando esté listo.");
     } catch (error) { setStatus(error.message || "No se pudo generar el quiz"); }
+  };
+  // A quiz built from material that never read properly is worth throwing away:
+  // its score counts towards the accuracy above, so leaving it there misreports
+  // how well the student actually knows the course.
+  const removeQuiz = async (quiz) => {
+    const scored = quiz.s == null ? "" : " Su nota deja de contar en tu precisión.";
+    if (!confirm(`¿Eliminar "${quiz.n}"?${scored}`)) return;
+    if (data.live && quiz.id) {
+      const response = await fetch(`/api/student/quizzes/${quiz.id}`, { method: "DELETE", headers: { "X-CSRFToken": data.csrf || "" } });
+      if (!response.ok) { alert("No se pudo eliminar el quiz."); return; }
+    }
+    setQuizzes((current) => current.filter((item) => item !== quiz));
   };
   return (
     <div className="sh-stage" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -143,8 +155,10 @@ function QuizzesTab({ plus, data = {} }) {
               <div className={"qz-score " + (q.s == null ? "none" : q.s >= 80 ? "hi" : q.s >= 60 ? "mid" : "lo")}>{q.s == null ? "nuevo" : q.s + "%"}</div>
               <div className="qz-b"><div className="qz-n">{q.n}</div><div className="qz-m">{q.m}</div></div>
               <a href={q.href || "/student/quizzes"} className="btn btn-ghost btn-sm">{q.s == null ? "Empezar" : "Repetir"}</a>
+              <button className="qz-x" onClick={() => removeQuiz(q)} aria-label={"Eliminar " + q.n}><IconClose size={13} /></button>
             </div>
           ))}
+          {!quizzes.length && <div className="ex-mat-empty">Aún no hay quizzes. Genera uno desde tus apuntes o una prueba pasada.</div>}
         </div>
         {!plus && (
           <div className="rv-locked" style={{ marginTop: 16 }}>

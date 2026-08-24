@@ -4358,11 +4358,16 @@ def register_student_routes(app, csrf, limiter):
                 for _quiz in (sdb.get_quizzes(_cid()) or []):
                     _quiz_id = int(_quiz.get("id") or 0)
                     _questions = int(_quiz.get("question_count") or 0)
+                    # best_score is 0 until the quiz is taken, so sending it as a
+                    # score made every generated-but-unopened quiz count as a
+                    # real zero in the accuracy figure. get_quiz_stats_by_exam
+                    # already averages attempted quizzes only; this matches it.
+                    _attempts = int(_quiz.get("attempts") or 0)
                     _tool_quizzes.append({
                         "id": _quiz_id,
                         "n": _quiz.get("title") or "Quiz",
                         "m": f'{_questions} preguntas · {_quiz.get("course_name") or "MachReach"}',
-                        "s": int(_quiz.get("best_score")) if _quiz.get("best_score") is not None else None,
+                        "s": int(_quiz.get("best_score") or 0) if _attempts > 0 else None,
                         "href": f"/student/quizzes/{_quiz_id}",
                     })
                 _app_data["tools"] = {

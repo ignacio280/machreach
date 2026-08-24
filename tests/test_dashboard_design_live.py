@@ -177,3 +177,39 @@ def test_courses_page_loads_the_shared_claude_app_shell(client, make_user):
     assert "/static/machreach_app/app/courses.css" in body
     assert "/static/machreach_app/cursos.bundle.min.js" in body
     assert "window.__MACHREACH_APP__=" in body
+
+
+def _app_payload(markup):
+    """The app payload ships base64 encoded, not as literal JSON."""
+    import base64
+
+    match = re.search(r'atob\("([^"]+)"\)', markup)
+    assert match, "the live app payload is missing"
+    return json.loads(base64.b64decode(match.group(1)).decode("utf-8"))
+
+
+def test_a_quiz_nobody_has_taken_is_not_counted_as_a_zero(client, make_user):
+    """The tools page averages the scores it is sent.
+
+    best_score sits at 0 until someone takes the quiz, so sending it as a score
+    made every generated-but-unopened quiz a real zero in the accuracy figure —
+    which is what "the quizzes I generated dragged my average down" was.
+    """
+    from student import db as sdb
+
+    client_id = _student(client, make_user, name="Quiz Stat Student")
+    untaken = sdb.create_quiz(client_id, "Nunca abierto", "medium")
+    taken = sdb.create_quiz(client_id, "Rendido", "medium")
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_quizzes SET attempts = 2, best_score = 40 WHERE id = %s",
+            (taken,),
+        )
+
+    payload = _app_payload(client.get("/student/quizzes").get_data(as_text=True))
+    scores = {q["n"]: q["s"] for q in payload["tools"]["quizzes"]}
+
+    assert scores["Nunca abierto"] is None
+    assert scores["Rendido"] == 40
+    assert untaken != taken

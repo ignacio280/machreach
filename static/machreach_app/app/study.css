@@ -61,6 +61,8 @@
 .qz-b{flex:1;min-width:0}
 .qz-n{font-family:var(--font-display);font-weight:800;font-size:15px;line-height:1.15}
 .qz-m{font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3);font-weight:700;margin-top:4px;letter-spacing:.05em;text-transform:uppercase}
+.qz-x{flex:none;line-height:0;padding:5px;border-radius:9px;color:var(--ink-3);transition:color .18s,background .18s}
+.qz-x:hover{color:var(--bad);background:var(--surface)}
 
 /* ---------- reviews ---------- */
 .rv-filters{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
