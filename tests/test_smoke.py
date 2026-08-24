@@ -44,7 +44,18 @@ def test_health_hides_database_exception_details(client, monkeypatch):
     assert "secret-pass" not in r.get_data(as_text=True)
 
 
-def test_health_rejects_an_outdated_schema(client):
+def test_an_outdated_schema_is_reported_without_killing_the_instance(client, monkeypatch):
+    """Liveness and correctness are different questions.
+
+    Render restarts whatever fails /health, so answering "degraded" there over a
+    schema mismatch turns a warning into an outage across every instance. The
+    mismatch still has to be caught: migrate.py refuses to finish a deploy on
+    it, and the operations probe reports it to whoever is monitoring.
+    """
+    import app as appmod
+    from machreach_core.db import check_schema_readiness
+
+    monkeypatch.setattr(appmod, "OPERATIONS_SECRET", "monitor-secret")
     with get_db() as db:
         _exec(
             db,
@@ -52,9 +63,16 @@ def test_health_rejects_an_outdated_schema(client):
             (SCHEMA_VERSION - 1, "core"),
         )
     try:
-        r = client.get("/health")
-        assert r.status_code == 503
-        assert r.get_json() == {"status": "degraded"}
+        assert client.get("/health").status_code == 200
+
+        probe = client.get(
+            "/health/operations",
+            headers={"X-Operations-Secret": "monitor-secret"},
+        )
+        assert probe.get_json()["checks"]["schema"]["status"] == "alert"
+
+        with pytest.raises(RuntimeError):
+            check_schema_readiness()
     finally:
         with get_db() as db:
             _exec(

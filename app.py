@@ -269,12 +269,21 @@ def _send_system_email(
 @app.route("/health")
 @limiter.exempt
 def health_check():
-    """Readiness probe: database connectivity and critical schema state."""
+    """Liveness probe: can this instance still reach the database?
+
+    Render kills an instance that cannot answer this within five seconds, so it
+    must stay cheap. It used to verify every schema version and probe five
+    tables — around seven round trips — which turned an ordinary slow moment on
+    the database into a killed instance and a "server failure" alert.
+
+    The schema is not unchecked: migrate.py runs check_schema_readiness() as its
+    last pre-deploy step, so a deploy carrying a stale schema never reaches an
+    instance at all, and /health/operations re-checks it for monitoring.
+    """
     try:
-        from machreach_core.db import check_schema_readiness, get_db, _fetchval
+        from machreach_core.db import get_db, _fetchval
         with get_db() as db:
             _fetchval(db, "SELECT 1")
-        check_schema_readiness()
         response = jsonify({"status": "healthy"})
         response.headers["Cache-Control"] = "no-store"
         return response, 200

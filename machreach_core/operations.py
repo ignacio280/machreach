@@ -52,6 +52,39 @@ def _dependency_checks() -> dict:
     }
 
 
+def _schema_check() -> dict:
+    """The verdict /health used to make on every probe, moved somewhere cheap.
+
+    A monitor reads this once a minute; Render reads /health constantly.
+    """
+    from machreach_core.db import check_schema_readiness
+
+    try:
+        check_schema_readiness()
+    except Exception:
+        return {"status": "alert"}
+    return {"status": "ok"}
+
+
+def _process_memory() -> dict:
+    """Resident memory of this process, read without a new dependency.
+
+    The service has been restarted repeatedly for exceeding its memory limit,
+    and nothing inside the app could see it coming: the first news was an email
+    from Render after the restart had already happened.
+    """
+    try:
+        with open("/proc/self/status", encoding="utf-8") as handle:
+            for line in handle:
+                if line.startswith("VmRSS:"):
+                    mb = round(int(line.split()[1]) / 1024)
+                    return {"status": "ok", "rss_mb": mb}
+    except OSError:
+        # Not Linux (local development); Render always is.
+        return {"status": "not_applicable"}
+    return {"status": "not_applicable"}
+
+
 def collect_operational_health() -> dict:
     """Return aggregate states only; never expose job, webhook, or user details."""
     with get_db() as db:
@@ -140,6 +173,8 @@ def collect_operational_health() -> dict:
             db_capacity = {"status": "not_applicable"}
 
     checks = {
+        "schema": _schema_check(),
+        "process_memory": _process_memory(),
         "worker_heartbeat": {"status": "alert" if worker_stale else "ok"},
         "queued_jobs": _signal(stale_queued),
         "exhausted_retries": _signal(exhausted),

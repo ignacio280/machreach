@@ -306,3 +306,61 @@ def test_resolve_script_refuses_to_close_every_failed_event(monkeypatch):
 
     assert resolve(["--apply"]) == 1
     assert collect_operational_health()["checks"]["failed_webhooks"]["status"] == "alert"
+
+
+def test_liveness_probe_makes_one_database_round_trip(client, monkeypatch):
+    """Render kills whatever cannot answer this in five seconds.
+
+    The probe used to verify two schema versions and inspect five tables, so a
+    slow moment on the database read as a dead instance. Anything added back to
+    this path is paid on every probe, of every instance, forever.
+    """
+    import machreach_core.db as core_db
+
+    queries = []
+    real_fetchval = core_db._fetchval
+
+    def counting_fetchval(db, sql, *args, **kwargs):
+        queries.append(sql)
+        return real_fetchval(db, sql, *args, **kwargs)
+
+    monkeypatch.setattr(core_db, "_fetchval", counting_fetchval)
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "healthy"}
+    assert queries == ["SELECT 1"]
+
+
+def test_operational_probe_reports_resident_memory(monkeypatch):
+    """The service is restarted for exceeding its memory limit.
+
+    Nothing inside the app could see it: the first news was an email from
+    Render, after the restart. This is where the number lives now.
+    """
+    import builtins
+
+    from machreach_core import operations
+
+    real_open = builtins.open
+
+    def fake_open(path, *args, **kwargs):
+        if path == "/proc/self/status":
+            import io as _io
+
+            return _io.StringIO("VmHWM:\t  512000 kB\nVmRSS:\t  259584 kB\n")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+
+    assert operations._process_memory() == {"status": "ok", "rss_mb": 254}
+
+    def no_proc(path, *args, **kwargs):
+        if path == "/proc/self/status":
+            raise OSError("not linux")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", no_proc)
+
+    assert operations._process_memory() == {"status": "not_applicable"}
