@@ -287,3 +287,46 @@ def test_resetting_a_forgotten_password_signs_out_every_existing_session(
 
     with intruder.session_transaction() as sess:
         assert "client_id" not in sess
+
+
+def test_a_login_with_no_session_is_handed_back_the_form_not_a_raw_400(client):
+    """The exact dead end students hit: a login page left open past the 24h
+    cookie posts with a token but no session to check it against, and the reply
+    was "Bad Request: The CSRF session token is missing." with no way out but
+    retyping the URL. /register already recovered; /login did not."""
+    # A token from the stale page, and no session cookie to check it against.
+    response = client.post(
+        "/login",
+        data={"csrf_token": "token-from-a-page-older-than-the-cookie",
+              "email": "x@example.test", "password": "y"},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/login")
+    assert "CSRF session token is missing" not in response.get_data(as_text=True)
+
+    # The redirect carries a fresh session, so the retry has a token that matches.
+    retried = client.get("/login")
+    assert retried.status_code == 200
+
+
+def test_the_password_reset_request_recovers_the_same_way(client):
+    response = client.post(
+        "/forgot-password",
+        data={"csrf_token": "token-from-a-page-older-than-the-cookie",
+              "email": "x@example.test"},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/forgot-password")
+
+
+def test_a_state_changing_route_still_refuses_a_request_with_no_csrf_token(client):
+    """Only the auth forms are handed back. Everything else must keep failing:
+    silently retrying a state-changing POST is what CSRF protection prevents."""
+    response = client.post(
+        "/logout", data={"csrf_token": "token-from-a-page-older-than-the-cookie"}
+    )
+
+    assert response.status_code == 400
+    assert "Bad Request" in response.get_data(as_text=True)

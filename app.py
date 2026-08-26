@@ -93,21 +93,40 @@ app.config["WTF_CSRF_TIME_LIMIT"] = None
 csrf = CSRFProtect(app)
 
 
+# Auth forms a rejected submit can be handed back to. Each is a GET page that
+# mints a fresh token, so the redirect below leaves the person somewhere they
+# can simply try again. Anything not listed here keeps the plain 400: a token
+# mismatch on a state-changing route is not something to retry silently.
+_CSRF_RETRY_PAGES = {
+    "/register": "register",
+    "/login": "login",
+    "/forgot-password": "forgot_password",
+}
+
+
 @app.errorhandler(CSRFError)
 def _handle_csrf_error(err):
-    """Recover gracefully from stale auth forms instead of showing raw 400s."""
+    """Recover gracefully from stale auth forms instead of showing raw 400s.
+
+    A missing session token means the browser sent no session at all — the
+    cookie expired under a login page left open overnight, or a restored tab
+    submitted a form older than the 24h cookie. The token itself is fine; there
+    is simply no session to check it against, and the person has done nothing
+    wrong. Showing them "Bad Request: The CSRF session token is missing." is a
+    dead end whose only escape is retyping the URL, which is what /login did
+    while /register recovered. The redirect issues a fresh session cookie, so
+    the retry has a token that matches.
+    """
     if request.path.startswith("/api/") or request.is_json:
         return jsonify({"error": "Session expired. Refresh and try again."}), 400
     reason = getattr(err, "description", "") or ""
-    recoverable_register = (
-        request.path == "/register"
-        and (
-            "session token is missing" in reason
-            or "tokens do not match" in reason
-            or "token has expired" in reason
-        )
+    stale_token = (
+        "session token is missing" in reason
+        or "tokens do not match" in reason
+        or "token has expired" in reason
     )
-    if not recoverable_register:
+    retry_endpoint = _CSRF_RETRY_PAGES.get(request.path)
+    if not (stale_token and retry_endpoint):
         return f"Bad Request: {reason}", 400
     try:
         _log_security("CSRF_REJECT", path=request.path, reason=reason)
@@ -119,10 +138,12 @@ def _handle_csrf_error(err):
         else "Tu sesion expiro. Intentalo de nuevo."
     )
     flash(("error", msg))
+    # Keep the referral the sign-up form was carrying, or the retry silently
+    # drops the invite that brought them here.
     ref = (request.form.get("ref") or "").strip().upper()[:16]
     if ref:
         session["referral_ref"] = ref
-    return redirect(url_for("register"))
+    return redirect(url_for(retry_endpoint))
 
 
 @app.before_request
