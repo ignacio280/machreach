@@ -176,86 +176,15 @@ def register_academic_routes(app, csrf, limiter):
 
         Includes only name, university, major, XP/level, badges, ranking, and
         friend-gated Focus totals. Email and academic records are never exposed.
+        The gate itself lives in `academic.public_profile`, shared with the
+        profile page so the two cannot expose different things.
         """
         if not _logged_in():
             return jsonify({"error": "unauthorized"}), 401
-        from machreach_core.db import get_db, _fetchone
-        with get_db() as db:
-            row = _fetchone(
-                db,
-                "SELECT id, name, university_id, major_id, retired "
-                "FROM clients WHERE id = %s AND account_type = 'student'",
-                (user_id,),
-            )
-        if not row:
+        profile = ac.public_profile(_cid(), user_id)
+        if profile is None:
             return jsonify({"error": "not found"}), 404
-        viewer_id = _cid()
-        if sdb.users_blocked(viewer_id, user_id):
-            return jsonify({"error": "not found"}), 404
-        if viewer_id != user_id:
-            from machreach_core.db import get_mail_preferences
-            try:
-                import json as _json
-                public_prefs = _json.loads(get_mail_preferences(user_id) or "{}")
-            except (TypeError, ValueError):
-                public_prefs = {}
-            if public_prefs.get("profile_public", True) is False:
-                return jsonify({"error": "not found"}), 404
-
-        univ = ac.get_university(int(row["university_id"])) if row.get("university_id") else None
-        major = ac.get_major(int(row["major_id"])) if row.get("major_id") else None
-        total_xp = sdb.get_total_xp(user_id) or 0
-        rank_info = sdb.get_study_rank(int(total_xp))
-        badges = sdb.get_badges(user_id) or []
-        retired = bool(row.get("retired") or 0)
-        my_scope = "retirement" if retired else "global"
-        my_rank_obj = ac.my_rank(my_scope, user_id) or {}
-
-        can_view_focus = viewer_id == user_id or sdb.are_friends(viewer_id, user_id)
-        try:
-            if not can_view_focus:
-                raise PermissionError
-            focus_stats = sdb.get_focus_stats(user_id) or {}
-            total_minutes = int(focus_stats.get("total_minutes") or 0)
-            sessions = int(focus_stats.get("total_sessions") or focus_stats.get("sessions") or 0)
-        except PermissionError:
-            total_minutes, sessions = None, None
-        except Exception:
-            total_minutes, sessions = 0, 0
-        total_hours = round(total_minutes / 60, 1) if total_minutes is not None else None
-
-        return jsonify({
-            "user_id": int(row["id"]),
-            "name": row.get("name") or "Student",
-            "university": univ,
-            "major": major,
-            "xp": int(total_xp),
-            "total_minutes": total_minutes,
-            "total_hours": total_hours,
-            "sessions": sessions,
-            "focus_private": not can_view_focus,
-            "rank": {
-                "full_name": rank_info.get("full_name"),
-                "tier": rank_info.get("tier"),
-                "division": rank_info.get("division"),
-                "color": rank_info.get("color"),
-                "index": rank_info.get("index"),
-                "progress_pct": rank_info.get("progress_pct"),
-            },
-            "leaderboard_position": {
-                "rank": my_rank_obj.get("rank"),
-                "total": my_rank_obj.get("total"),
-                "scope": my_scope,
-            },
-            "badges": [
-                {"key": b.get("badge_key"), "name": b.get("name"),
-                 "icon": b.get("emoji") or b.get("icon") or "🏅",
-                 "desc": b.get("desc", ""),
-                 "earned_at": str(b.get("earned_at") or "")}
-                for b in badges
-            ],
-            "badge_count": len(badges),
-        })
+        return jsonify(profile)
 
     # ── leaderboards ────────────────────────────────────────
 

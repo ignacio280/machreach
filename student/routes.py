@@ -19325,201 +19325,68 @@ No markdown, no code fences. ONLY JSON.
 
     # ─── Public student profile (read-only) ────────────────────────────
     # Anyone logged in can view another student's public stats by clicking
-    # them on the leaderboard. Only PUBLIC fields are exposed (see the
-    # /api/academic/user/<id> endpoint). Email is never shown.
+    # them on the leaderboard or in their friends list. The page renders the
+    # same authored design as your own profile, over only the fields
+    # `academic.public_profile` allows — the gate the JSON API uses too.
     @app.route("/student/profile/<int:user_id>")
     def student_public_profile_page(user_id):
         if not _logged_in():
             return redirect(url_for("login"))
-        is_self = (user_id == _cid())
-        _es_pf = session.get("lang", "es") != "en"
-        title = ("Tu perfil" if is_self else "Perfil de estudiante") if _es_pf else ("Your Profile" if is_self else "Student Profile")
-        _loading = "Cargando perfil…" if _es_pf else "Loading profile…"
-        content = """
-<style>""" + sdb.BANNER_ANIM_CSS + """
-  #mr-prof { --pf-card:#10172A; --pf-border:rgba(148,163,184,.12); }
-  #mr-prof .pf-loading, #mr-prof .pf-error { padding:60px 20px; text-align:center; color:var(--text-muted);}
-  /* Twitter-style hero: full-width banner, avatar overlapping bottom-left,
-     identity strip (name + rank·XP) sits below in a flat dark band. */
-  #mr-prof .pf-banner {
-    height:140px; border-radius:14px 14px 0 0; position:relative; overflow:hidden;
-    border:1px solid var(--border); border-bottom: none;
-  }
-  #mr-prof .pf-banner-fallback {
-    background: linear-gradient(135deg, #06b6d4 0%, #2563eb 100%);
-  }
-  #mr-prof .pf-identity {
-    background: #0B1220; border: 1px solid var(--border); border-top: none;
-    border-radius: 0 0 14px 14px; padding: 14px 22px 18px 22px;
-    position: relative;
-  }
-  #mr-prof .pf-avatar {
-    width:72px; height:72px; border-radius:50%; flex-shrink:0;
-    background: linear-gradient(135deg, #3B4A7A, #5B4694);
-    display:flex; align-items:center; justify-content:center;
-    color:#fff; font-size:26px; font-weight:700;
-    border: 3px solid #0B1220;
-    position: absolute; left: 22px; top: -36px; z-index: 2;
-  }
-  #mr-prof .pf-id-body { padding-top: 42px; }
-  /* The identity band is always dark (#0B1220), so force light text on it
-     regardless of the app's light/dark theme (light mode forces headings dark). */
-  #mr-prof .pf-name { font-size:22px; font-weight:800; margin:0 0 4px; letter-spacing:-.02em; color:#fff !important; }
-  #mr-prof .pf-rankline {
-    font-family: "Nunito", sans-serif;
-    font-size:13px; color: rgba(255,255,255,.72) !important; letter-spacing:.02em;
-  }
-  #mr-prof .pf-rankline b { color:#fff !important; font-weight:700; }
-  #mr-prof .pf-edit-btn {
-    position:absolute; top:14px; right:18px; z-index:3;
-    display:inline-flex; align-items:center; gap:6px;
-    padding:8px 14px; border-radius:999px;
-    background:#FF7A3D; color:#fff; font-size:13px; font-weight:700;
-    text-decoration:none; border:1px solid #E65F20;
-    box-shadow:0 4px 0 rgba(179,60,0,.28);
-  }
-  #mr-prof .pf-edit-btn:hover { filter:brightness(1.05); }
-  #mr-prof .pf-hero {
-    background: linear-gradient(135deg, rgba(124,156,255,.12), rgba(192,132,252,.08));
-    border: 1px solid var(--border); border-radius: 18px; padding: 22px 26px;
-    display:flex; gap:20px; align-items:center; flex-wrap:wrap; position:relative;
-    margin-top: 16px;
-  }
-  #mr-prof .pf-meta { color:var(--text-muted); font-size:14px; display:flex; gap:14px; flex-wrap:wrap; }
-  #mr-prof .pf-rank-card {
-    margin-left:auto; padding:14px 20px; border-radius:14px;
-    background: rgba(255,255,255,.03); border:1px solid var(--border); text-align:center;
-  }
-  #mr-prof .pf-rank-name { font-size:18px; font-weight:700; }
-  #mr-prof .pf-rank-xp { font-size:13px; color:var(--text-muted); margin-top:4px; }
-  #mr-prof .pf-grid {
-    display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap:14px; margin-top:20px;
-  }
-  #mr-prof .pf-stat {
-    background: var(--card); border:1px solid var(--border); border-radius:14px;
-    padding:18px 20px;
-  }
-  #mr-prof .pf-stat .label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.1em; }
-  #mr-prof .pf-stat .value { font-size:22px; font-weight:700; margin-top:6px; }
-  #mr-prof .pf-section {
-    margin-top:24px; background:var(--card); border:1px solid var(--border);
-    border-radius:18px; padding:24px;
-  }
-  #mr-prof .pf-section h3 { margin:0 0 16px; font-size:18px; }
-  #mr-prof .pf-badges { display:flex; flex-wrap:wrap; gap:10px; }
-  #mr-prof .pf-badge {
-    padding:8px 14px; border-radius:999px;
-    background: rgba(124,156,255,.1); border:1px solid rgba(124,156,255,.3);
-    font-size:13px; display:inline-flex; align-items:center; gap:6px;
-    cursor: help; position: relative;
-  }
-  #mr-prof .pf-badge .pf-tip {
-    position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%);
-    background:#0B1220; color:#fff; font-size:12px; line-height:1.35; padding:8px 12px;
-    border-radius:8px; min-width:200px; max-width:280px; text-align:left;
-    box-shadow:0 8px 24px rgba(15,23,42,.4); display:none; z-index:30; pointer-events:none;
-    white-space:normal;
-  }
-  #mr-prof .pf-badge .pf-tip b { display:block; margin-bottom:3px; font-size:13px; }
-  #mr-prof .pf-badge:hover .pf-tip { display:block; }
-  #mr-prof .pf-empty { color:var(--text-muted); font-size:13px; }
-  #mr-prof .pf-retired-tag {
-    display:inline-block; padding:4px 12px; border-radius:999px;
-    background: rgba(34,197,94,.12); color:#22c55e;
-    font-size:12px; font-weight:600; margin-left:8px;
-  }
-  @media (max-width: 600px) {
-    #mr-prof .pf-hero { padding:20px; }
-    #mr-prof .pf-rank-card { margin-left:0; width:100%; }
-    #mr-prof .pf-name { font-size:22px; }
-  }
-</style>
-<div id="mr-prof"><div class="pf-loading">""" + _loading + """</div></div>
-<script>
-(function(){
-  var USER_ID = """ + str(int(user_id)) + """;
-  var IS_SELF = """ + ("true" if is_self else "false") + """;
-  function escapeHtml(s){return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-  function initials(name){return (name||'?').split(/\\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();}
-  function fmtMin(m){ m = m||0; if (m < 60) return m + 'm'; var h = Math.floor(m/60), r = m%60; return r ? (h+'h '+r+'m') : (h+'h'); }
-  function t(en, es){ return document.documentElement.lang !== 'en' ? es : en; }
-  fetch('/api/academic/user/' + USER_ID).then(r => r.json()).then(p => {
-    var box = document.getElementById('mr-prof');
-    if (!p || p.error) { box.innerHTML = '<div class="pf-error">' + t('Profile not found.','Perfil no encontrado.') + '</div>'; return; }
-    var uniName = p.university ? escapeHtml(p.university.name || '') : '<span style="color:var(--text-muted);">' + t('No university set','Sin universidad') + '</span>';
-    var majorName = p.major ? escapeHtml(p.major.name || '') : '<span style="color:var(--text-muted);">' + t('No major set','Sin carrera') + '</span>';
-    var rankColor = (p.rank && p.rank.color) || '#6366F1';
-    var rankName = (p.rank && p.rank.full_name) || t('Unranked','Sin rango');
-    var leaderPos = p.leaderboard_position;
-    var isRetired = !!(leaderPos && leaderPos.scope === 'retirement');
-    var retiredTag = isRetired ? '<span class="pf-retired-tag">🏖️ ' + t('Graduate','Egresado') + '</span>' : '';
-    var posLine = (leaderPos && leaderPos.rank)
-      ? '#' + leaderPos.rank + ' / ' + (leaderPos.total||'?') + ' (' + (leaderPos.scope==='retirement' ? t('Retired','Retirado') : 'Global') + ')'
-      : t('Unranked','Sin clasificar');
-    var _profEs = document.documentElement.lang !== 'en';
-    var editBtn = IS_SELF ? '<a class="pf-edit-btn" href="/student/profile/edit">✏️ ' + (_profEs ? 'Editar perfil' : 'Edit profile') + '</a>' : '';
-    var html = '';
-    var bannerStyle = '';
-    var bannerCls = 'pf-banner-fallback';
-    // Twitter-style banner with avatar overlapping the identity strip below.
-    html += '<div class="pf-banner ' + bannerCls + '" style="' + bannerStyle + '"></div>';
-    html += '<div class="pf-identity">';
-    html +=   editBtn;
-    html +=   '<div class="pf-avatar">' + initials(p.name) + '</div>';
-    html +=   '<div class="pf-id-body">';
-    html +=     '<h1 class="pf-name">' + escapeHtml(p.name) + retiredTag + '</h1>';
-    var rankNum = (leaderPos && leaderPos.rank) ? ('#' + leaderPos.rank) : t('Unranked','Sin rango');
-    html +=     '<div class="pf-rankline">' + t('Rank','Rango') + ' <b>' + rankNum + '</b> &middot; <b>' + (p.xp||0).toLocaleString() + '</b> XP</div>';
-    html += '</div>';
-    html += '</div>';
+        # Your own profile has a page of its own, with your email, your courses
+        # and the edit button on it. Land there rather than showing you the
+        # public view of yourself with all of that stripped out.
+        if user_id == _cid():
+            return redirect(url_for("student_profile_page"))
 
-    // Secondary hero card: public university, major, and level.
-    html += '<div class="pf-hero">';
-    html +=   '<div style="flex:1;min-width:200px;">';
-    html +=     '<div class="pf-meta">';
-    html +=       '<span>🎓 ' + uniName + '</span>';
-    html +=       '<span>📚 ' + majorName + '</span>';
-    html +=     '</div>';
-    html +=   '</div>';
-    html +=   '<div class="pf-rank-card" style="border-color:' + rankColor + '44;">';
-    html +=     '<div class="pf-rank-name" style="color:' + rankColor + ';">' + escapeHtml(rankName) + '</div>';
-    html +=     '<div class="pf-rank-xp">' + (p.xp||0).toLocaleString() + ' XP</div>';
-    html +=   '</div>';
-    html += '</div>';
-    html += '<div class="pf-grid">';
-    html +=   '<div class="pf-stat"><div class="label">' + t('XP total','XP total') + '</div><div class="value">' + (p.xp||0).toLocaleString() + '</div></div>';
-    if (!p.focus_private) {
-      html += '<div class="pf-stat"><div class="label">' + t('Total hours studied','Horas estudiadas') + '</div><div class="value">' + ((p.total_hours||0).toFixed(1)) + 'h</div></div>';
-      html += '<div class="pf-stat"><div class="label">' + t('Focus sessions','Sesiones de enfoque') + '</div><div class="value">' + (p.sessions||0).toLocaleString() + '</div></div>';
-    }
-    html +=   '<div class="pf-stat"><div class="label">' + t('Leaderboard','Clasificación') + '</div><div class="value">' + posLine + '</div></div>';
-    html +=   '<div class="pf-stat"><div class="label">' + t('Badges','Insignias') + '</div><div class="value">' + (p.badge_count||0) + '</div></div>';
-    html += '</div>';
-    html += '<div class="pf-section"><h3>🏆 ' + t('Badges','Insignias') + '</h3>';
-    if (!p.badges || !p.badges.length) {
-      html += '<div class="pf-empty">' + t('No badges earned yet.','Aún no hay insignias.') + '</div>';
-    } else {
-      html += '<div class="pf-badges">';
-      p.badges.forEach(b => {
-        var name = escapeHtml(b.name || b.key || t('Badge','Insignia'));
-        var desc = escapeHtml(b.desc || t('Earned badge.','Insignia obtenida.'));
-        var earned = b.earned_at ? ('<div style="margin-top:4px;color:#94a3b8;font-size:11px;">' + t('Earned','Obtenida') + ' ' + escapeHtml(String(b.earned_at).slice(0,10)) + '</div>') : '';
-        html += '<span class="pf-badge">' + (b.icon||'🎖️') + ' ' + name +
-                '<span class="pf-tip"><b>' + name + '</b>' + desc + earned + '</span></span>';
-      });
-      html += '</div>';
-    }
-    html += '</div>';
-    box.innerHTML = html;
-  }).catch(e => {
-    document.getElementById('mr-prof').innerHTML = '<div class="pf-error">' + t('Failed to load profile.','No se pudo cargar el perfil.') + '</div>';
-  });
-})();
-</script>
-"""
-        active = "student_profile" if is_self else "student_leaderboard"
-        return _s_render(title, content, active_page=active)
+        from student import academic as _ac
+
+        _es_pf = session.get("lang", "es") != "en"
+        title = "Perfil de estudiante" if _es_pf else "Student Profile"
+        profile = _ac.public_profile(_cid(), user_id)
+        if profile is None:
+            # Missing, blocked, or profile turned off — one answer for all
+            # three, or the difference tells a blocked viewer they were blocked.
+            missing = "Perfil no encontrado." if _es_pf else "Profile not found."
+            return _s_render(
+                title,
+                f'<div class="pf-empty" style="padding:60px 20px;text-align:center;">{_esc(missing)}</div>',
+                active_page="student_leaderboard",
+            ), 404
+
+        # Presentation details derived from public facts. The avatar is already
+        # visible to every signed-in student (see student_profile_picture), and
+        # the level is a function of XP, which is public.
+        try:
+            _pub_picture_version = sdb.profile_picture_version(user_id)
+        except Exception:
+            _pub_picture_version = ""
+        _pub_xp = int(profile.get("xp") or 0)
+        _pub_level = 1
+        for _idx, (_threshold, *_rest) in enumerate(sdb.LEVEL_THRESHOLDS):
+            if _pub_xp >= int(_threshold):
+                _pub_level = _idx + 1
+        payload = dict(profile)
+        payload.update({
+            "avatar_color": _student_avatar_color(user_id),
+            "picture_url": (
+                f"/student/profile/picture/{user_id}?v={_pub_picture_version}"
+                if _pub_picture_version else ""
+            ),
+            "level_number": _pub_level,
+            "retired": (profile.get("leaderboard_position") or {}).get("scope") == "retirement",
+        })
+        # Server-rendered fallback for a browser that never runs the bundle.
+        fallback = (
+            f'<h1>{_esc(profile.get("name") or "")}</h1>'
+            f'<p>{_pub_xp:,} XP</p>'.replace(",", ".")
+        )
+        return _s_render(
+            title,
+            fallback,
+            active_page="student_leaderboard",
+            live_design="perfil-publico",
+            live_design_data={"public_profile": payload},
+        )
 
 
     # ── Retirement (opt out of active rankings) ──────────────
@@ -21073,11 +20940,18 @@ No markdown, no code fences. ONLY JSON.
 
     @app.route("/student/profile")
     def student_profile_page():
-        # Your own profile now lands on the public view (what other students see),
-        # which renders an "Edit profile" button when viewing yourself.
+        # Your own profile: the `perfil` design, which the path table in
+        # _s_render wires to your private payload — email, courses, plan and
+        # the edit button. Another student's profile is a different page
+        # (student_public_profile_page) over a much smaller set of facts.
         if not _logged_in():
             return redirect(url_for("login"))
-        return student_public_profile_page(_cid())
+        _es_own = session.get("lang", "es") != "en"
+        return _s_render(
+            "Tu perfil" if _es_own else "Your Profile",
+            "",
+            active_page="student_profile",
+        )
 
     @app.route("/student/profile/edit")
     def student_profile_edit_page():

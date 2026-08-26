@@ -45,8 +45,9 @@ _PAGES: dict[str, str] = {
 }
 
 # Stylesheets each page needs when served live. A slug may appear here without
-# appearing in _PAGES: `quiz` is a live-only page — it renders one real quiz,
-# so there is no mock worth previewing under /design.
+# appearing in _PAGES when it is live-only — `quiz` renders one real quiz and
+# `perfil-publico` one real student, so neither has a mock worth previewing
+# under /design.
 _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "amigos": ("dash.css", "focus.css", "plan.css", "rank.css", "friends.css"),
     "analiticas": ("dash.css", "focus.css", "plan.css", "courses.css", "analytics.css"),
@@ -62,6 +63,7 @@ _PAGE_CSS: dict[str, tuple[str, ...]] = {
     "tienda": ("dash.css", "focus.css", "plan.css", "analytics.css", "shop.css"),
     "perfil": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
     "perfil-editar": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css", "profedit.css"),
+    "perfil-publico": ("dash.css", "focus.css", "plan.css", "friends.css", "profile.css"),
     "ajustes": ("dash.css", "study.css", "plan.css", "friends.css", "profile.css", "settings.css"),
     "cuenta": ("pubtop.css", "auth.css"),
     "setup": ("dash.css", "profile.css", "pubtop.css", "setup.css"),

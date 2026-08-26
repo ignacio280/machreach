@@ -91,6 +91,11 @@ const PAGE_DEPS = {
     css: ["dash.css", "focus.css", "plan.css", "friends.css", "profile.css", "profedit.css"],
     jsx: ["shell.jsx", "lock.jsx", "profedit.jsx"],
   },
+  "perfil-publico": {
+    css: ["dash.css", "focus.css", "plan.css", "friends.css", "profile.css"],
+    jsx: ["shell.jsx", "lock.jsx", "pubprofile.jsx"],
+    live: true,
+  },
   ajustes: {
     css: ["dash.css", "study.css", "plan.css", "friends.css", "profile.css", "settings.css"],
     jsx: ["shell.jsx", "lock.jsx", "settings.jsx"],

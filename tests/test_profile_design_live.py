@@ -149,3 +149,99 @@ def test_profile_payload_uses_weighted_grade_and_selected_banner(client, make_us
     assert profile["courses"][0]["grade"] == "4,4"
     assert profile["cover_anim_class"] == "bnr-anim-cherry"
     assert "@keyframes bnr-cherry" in body
+
+
+def _other_student(make_user, *, name, xp=0):
+    """A second student, set up far enough to appear on a profile page."""
+    other = make_user(name=name)
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (other,))
+        if xp:
+            _exec(
+                db,
+                "INSERT INTO student_xp (client_id, action, xp, detail) VALUES (%s, %s, %s, %s)",
+                (other, "test", xp, "public profile"),
+            )
+    return other
+
+
+def test_another_students_profile_uses_the_live_design_not_the_legacy_markup(client, make_user):
+    """/student/profile/<id> used to render its own dark inline page, because
+    the design table in _s_render can only key on exact paths and this one
+    carries an id. Same design as everywhere else now, over public facts only."""
+    _student(client, make_user, name="Profile Viewer")
+    other = _other_student(make_user, name="Rival Student", xp=4200)
+
+    response = client.get(f"/student/profile/{other}")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "/static/machreach_app/perfil-publico.bundle.min.js" in body
+    assert "/static/machreach_app/app/profile.css" in body
+    # The legacy page's markup and its private-to-you bundle are both gone.
+    assert "mr-prof" not in body
+    assert "/static/machreach_app/perfil.bundle.min.js" not in body
+
+    profile = _app_payload(body)["public_profile"]
+    assert profile["name"] == "Rival Student"
+    assert profile["xp"] == 4200
+    assert profile["level_number"] > 1
+    # Nothing the public-profile gate withholds may ride along in the payload.
+    assert {"email", "bio", "joined_at", "created_at", "courses", "heat", "preferences"}.isdisjoint(profile)
+
+
+def test_another_students_focus_totals_stay_friend_gated_on_the_page(client, make_user):
+    viewer = _student(client, make_user, name="Focus Viewer")
+    other = _other_student(make_user, name="Focus Target", xp=200)
+    sdb.save_focus_session(other, "pomodoro", 45, 0)
+
+    stranger = _app_payload(client.get(f"/student/profile/{other}").get_data(as_text=True))["public_profile"]
+    assert stranger["focus_private"] is True
+    assert stranger["total_minutes"] is None
+
+    sdb.add_friend(viewer, other)
+    sdb.add_friend(other, viewer)
+
+    friend = _app_payload(client.get(f"/student/profile/{other}").get_data(as_text=True))["public_profile"]
+    assert friend["focus_private"] is False
+    assert friend["total_minutes"] == 45
+
+
+def test_a_profile_you_may_not_see_answers_the_same_way_as_one_that_is_missing(client, make_user):
+    """Missing, blocked and switched-off must be indistinguishable, or the
+    difference tells a blocked viewer they were blocked."""
+    viewer = _student(client, make_user, name="Blocked Viewer")
+    hidden = _other_student(make_user, name="Hidden Student", xp=100)
+    update_mail_preferences(hidden, json.dumps({"profile_public": False}))
+    blocked = _other_student(make_user, name="Blocking Student", xp=100)
+    sdb.block_student(blocked, viewer)
+
+    missing_response = client.get("/student/profile/99887764")
+    hidden_response = client.get(f"/student/profile/{hidden}")
+    blocked_response = client.get(f"/student/profile/{blocked}")
+
+    for response in (missing_response, hidden_response, blocked_response):
+        assert response.status_code == 404
+        body = response.get_data(as_text=True)
+        assert "Perfil no encontrado" in body
+        assert "public_profile" not in body
+
+    # Byte-identical once the per-response CSP nonce is normalised — the nonce
+    # is minted fresh for every response and says nothing about the student.
+    def _stable(response):
+        return re.sub(r'nonce="[^"]+"', 'nonce=""', response.get_data(as_text=True))
+
+    assert _stable(hidden_response) == _stable(blocked_response) == _stable(missing_response)
+
+
+def test_your_own_id_lands_on_your_own_profile_rather_than_the_public_view(client, make_user):
+    """The public view strips out your email, courses and edit button, so
+    /student/profile/<your id> has to hand you the real thing."""
+    client_id = _student(client, make_user, name="Self Viewer")
+
+    redirected = client.get(f"/student/profile/{client_id}")
+
+    assert redirected.status_code == 302
+    assert redirected.headers["Location"].endswith("/student/profile")
+    own = client.get("/student/profile")
+    assert "/static/machreach_app/perfil.bundle.min.js" in own.get_data(as_text=True)

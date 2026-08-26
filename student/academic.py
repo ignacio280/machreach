@@ -1195,6 +1195,99 @@ def leaderboard(scope: str, client_id: int, limit: int = 100, period: str = "all
     return out
 
 
+def public_profile(viewer_id: int, user_id: int) -> Optional[dict]:
+    """Return the public-safe profile for one student, or None to show nothing.
+
+    One gate for both readers of a profile — the JSON API and the profile page
+    — so neither can drift into exposing more than the other. Public: name,
+    university, major, XP, study rank, leaderboard position and badges.
+    Never public: email, bio, joined date, equipped cosmetics and academic
+    records. Focus totals need an accepted friendship.
+
+    None means "do not show this profile", and covers a missing student, a
+    block in either direction, and a student who turned their profile off —
+    the caller must answer all three identically, or the difference tells a
+    blocked viewer they were blocked.
+    """
+    from student import db as sdb
+
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT id, name, university_id, major_id, retired "
+            "FROM clients WHERE id = %s AND account_type = 'student'",
+            (user_id,),
+        )
+    if not row:
+        return None
+    if sdb.users_blocked(viewer_id, user_id):
+        return None
+    if viewer_id != user_id:
+        from machreach_core.db import get_mail_preferences
+        try:
+            import json as _json
+            public_prefs = _json.loads(get_mail_preferences(user_id) or "{}")
+        except (TypeError, ValueError):
+            public_prefs = {}
+        if public_prefs.get("profile_public", True) is False:
+            return None
+
+    univ = get_university(int(row["university_id"])) if row.get("university_id") else None
+    major = get_major(int(row["major_id"])) if row.get("major_id") else None
+    total_xp = sdb.get_total_xp(user_id) or 0
+    rank_info = sdb.get_study_rank(int(total_xp))
+    badges = sdb.get_badges(user_id) or []
+    retired = bool(row.get("retired") or 0)
+    my_scope = "retirement" if retired else "global"
+    my_rank_obj = my_rank(my_scope, user_id) or {}
+
+    can_view_focus = viewer_id == user_id or sdb.are_friends(viewer_id, user_id)
+    try:
+        if not can_view_focus:
+            raise PermissionError
+        focus_stats = sdb.get_focus_stats(user_id) or {}
+        total_minutes = int(focus_stats.get("total_minutes") or 0)
+        sessions = int(focus_stats.get("total_sessions") or focus_stats.get("sessions") or 0)
+    except PermissionError:
+        total_minutes, sessions = None, None
+    except Exception:
+        total_minutes, sessions = 0, 0
+    total_hours = round(total_minutes / 60, 1) if total_minutes is not None else None
+
+    return {
+        "user_id": int(row["id"]),
+        "name": row.get("name") or "Student",
+        "university": univ,
+        "major": major,
+        "xp": int(total_xp),
+        "total_minutes": total_minutes,
+        "total_hours": total_hours,
+        "sessions": sessions,
+        "focus_private": not can_view_focus,
+        "rank": {
+            "full_name": rank_info.get("full_name"),
+            "tier": rank_info.get("tier"),
+            "division": rank_info.get("division"),
+            "color": rank_info.get("color"),
+            "index": rank_info.get("index"),
+            "progress_pct": rank_info.get("progress_pct"),
+        },
+        "leaderboard_position": {
+            "rank": my_rank_obj.get("rank"),
+            "total": my_rank_obj.get("total"),
+            "scope": my_scope,
+        },
+        "badges": [
+            {"key": b.get("badge_key"), "name": b.get("name"),
+             "icon": b.get("emoji") or b.get("icon") or "🏅",
+             "desc": b.get("desc", ""),
+             "earned_at": str(b.get("earned_at") or "")}
+            for b in badges
+        ],
+        "badge_count": len(badges),
+    }
+
+
 def my_rank(scope: str, client_id: int, period: str = "all") -> Optional[dict]:
     """
     Efficient 'where am I in this leaderboard?' lookup without materializing
