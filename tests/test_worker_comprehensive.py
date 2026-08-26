@@ -265,6 +265,29 @@ def test_process_loop_delivers_claimed_verification_jobs(monkeypatch):
     assert processed == [(31, True)]
 
 
+def test_process_loop_delivers_claimed_password_reset_jobs(monkeypatch):
+    import machreach_core.verification_delivery as delivery
+
+    processed = []
+    monkeypatch.setattr(worker, "record_worker_heartbeat", lambda: None)
+    monkeypatch.setattr(
+        worker,
+        "claim_async_jobs",
+        lambda kind, **kwargs: (
+            [{"id": 41, "job_key": "reset"}] if kind == "password_reset_email" else []
+        ),
+    )
+    monkeypatch.setattr(
+        delivery,
+        "process_reset_job",
+        lambda job, sender: processed.append((job["id"], callable(sender))),
+    )
+
+    worker.process_async_jobs()
+
+    assert processed == [(41, True)]
+
+
 def test_heartbeat_recovers_stale_ai_usage_and_reports_failure(monkeypatch):
     monkeypatch.setattr(worker, "record_worker_heartbeat", lambda: None)
     monkeypatch.setattr(ai_usage, "reconcile_stale_reservations", lambda: 2)

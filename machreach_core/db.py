@@ -966,6 +966,7 @@ _CLIENT_KEYED_JOB_TYPES = (
     "student_quiz_generation",
     "student_flashcard_generation",
     "verification_email",
+    "password_reset_email",
 )
 
 

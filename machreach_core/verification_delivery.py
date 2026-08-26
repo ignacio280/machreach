@@ -1,4 +1,14 @@
-"""Reliable email-verification delivery and stale-account cleanup."""
+"""Reliable delivery for the auth emails, and stale-account cleanup.
+
+Nothing here sends mail inside a web request. SMTP talks to another company's
+server with a 30-second socket timeout, and the web service is one gunicorn
+worker with a handful of threads: a slow mail server held a thread per attempt,
+a few students pressing "resend" together held them all, and with every thread
+waiting on SMTP not even /health could answer — which Render reads as a dead
+instance and restarts. That was the site "not loading" during the Workspace
+outage, worst for whoever was stuck unverified and retrying. Requests enqueue;
+the worker, which claims these jobs every five seconds, does the sending.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -10,6 +20,7 @@ from machreach_core.db import (
     _USE_PG,
     _exec,
     _fetchall,
+    create_reset_token,
     create_verification_token,
     enqueue_async_job,
     fail_async_job,
@@ -22,6 +33,7 @@ from machreach_core.db import (
 
 Sender = Callable[[str, str, str], bool]
 JOB_TYPE = "verification_email"
+RESET_JOB_TYPE = "password_reset_email"
 MAX_ATTEMPTS = 3
 
 
@@ -45,19 +57,66 @@ def _deliver_once(client_id: int, sender: Sender) -> bool:
         return False
 
 
-def send_or_queue(client_id: int, sender: Sender) -> dict:
-    """Attempt delivery immediately and queue at most three retries on failure."""
-    if _deliver_once(client_id, sender):
-        set_async_job_status(JOB_TYPE, str(client_id), "done", "Verification email sent.")
-        return {"sent": True, "queued": False}
-    enqueue_async_job(
+def queue_verification_email(client_id: int) -> dict:
+    """Queue delivery for the worker; never talks to SMTP in the request."""
+    return enqueue_async_job(
         JOB_TYPE,
         str(client_id),
         input_payload={"client_id": int(client_id)},
-        progress="Verification email delayed; retry queued.",
+        progress="Verification email queued.",
         max_attempts=MAX_ATTEMPTS,
     )
-    return {"sent": False, "queued": True}
+
+
+def _deliver_reset_once(client_id: int, sender: Sender) -> bool:
+    """Mint a reset token and send its link. The token is generated here, at
+    send time, so a retry mails a link that is valid for its full hour rather
+    than one minted before the first failed attempt."""
+    client = get_client(client_id)
+    if not client:
+        return True
+    token = secrets.token_urlsafe(32)
+    expires = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+    create_reset_token(client_id, token, expires)
+    reset_link = f"{BASE_URL}/reset-password/{token}"
+    body = "\n\n".join([
+        "Entra aquí para restablecer tu contraseña de MachReach:",
+        reset_link,
+        "Este enlace vence en 1 hora.",
+        "Si no lo pediste, ignora este correo.",
+    ])
+    try:
+        return bool(sender(str(client.get("email") or ""), "MachReach — Restablecer contraseña", body))
+    except Exception:
+        return False
+
+
+def queue_password_reset(client_id: int) -> dict:
+    """Queue a password-reset email for the worker."""
+    return enqueue_async_job(
+        RESET_JOB_TYPE,
+        str(client_id),
+        input_payload={"client_id": int(client_id)},
+        progress="Password reset email queued.",
+        max_attempts=MAX_ATTEMPTS,
+    )
+
+
+def process_reset_job(job: dict, sender: Sender) -> dict:
+    client_id = int(job.get("job_key") or 0)
+    if _deliver_reset_once(client_id, sender):
+        set_async_job_status(RESET_JOB_TYPE, str(client_id), "done", "Password reset email sent.")
+        return {"status": "done"}
+    result = fail_async_job(
+        RESET_JOB_TYPE,
+        str(client_id),
+        "SMTP password reset delivery failed",
+        progress="Could not deliver the password reset email.",
+        retry=True,
+    )
+    if result.get("status") == "error":
+        record_operational_event("smtp_failure", "password_reset")
+    return result
 
 
 def process_job(job: dict, sender: Sender) -> dict:

@@ -41,7 +41,6 @@ if SENTRY_DSN:
 
 from machreach_core.db import (
     create_client,
-    create_reset_token,
     get_client,
     get_client_by_email,
     get_valid_reset_token,
@@ -2628,14 +2627,13 @@ def register():
                 print(f"[REFERRAL] Failed to stash ref for {email}: {_re}", flush=True)
             session.pop("referral_ref", None)
 
-        from machreach_core.verification_delivery import send_or_queue
-        delivery = send_or_queue(client_id, _send_system_email)
-        return redirect(url_for(
-            "verify_email_pending",
-            email=email,
-            created="1",
-            delayed="1" if delivery["queued"] else "0",
-        ))
+        # Queued, not sent here: SMTP inside a request held one of the few
+        # gunicorn threads for its 30s timeout, and a handful of sign-ups
+        # against a slow mail server could starve the whole service. The
+        # worker claims the job within seconds.
+        from machreach_core.verification_delivery import queue_verification_email
+        queue_verification_email(client_id)
+        return redirect(url_for("verify_email_pending", email=email, created="1"))
     # Referral capture: a shared link is /register?ref=CODE. Keep it in the
     # session so it survives the preview->submit roundtrip, and pass it into the
     # Canvas signup form as a hidden field.
@@ -2801,19 +2799,13 @@ def verify_email(token):
 def resend_verification():
     email = request.form.get("email", "").strip()
     client = get_client_by_email(email)
-    delayed = False
     if client and not client.get("email_verified"):
-        from machreach_core.verification_delivery import send_or_queue
-        delayed = bool(send_or_queue(int(client["id"]), _send_system_email)["queued"])
+        from machreach_core.verification_delivery import queue_verification_email
+        queue_verification_email(int(client["id"]))
     # If we know an email, take the user back to the dedicated pending page
     # so they land somewhere meaningful — the toast on /login was easy to miss.
     if email:
-        return redirect(url_for(
-            "verify_email_pending",
-            email=email,
-            sent="1",
-            delayed="1" if delayed else "0",
-        ))
+        return redirect(url_for("verify_email_pending", email=email, sent="1"))
     flash(("info", "If the email is registered, a new verification link has been sent."))
     return redirect(url_for("login"))
 
@@ -2861,23 +2853,14 @@ def forgot_password():
         email = request.form.get("email", "").strip()
         client = get_client_by_email(email)
         if client:
-            import secrets
-            from datetime import datetime, timedelta
-            token = secrets.token_urlsafe(32)
-            expires = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-            create_reset_token(client["id"], token, expires)
-            from machreach_core.config import BASE_URL
-            reset_link = f"{BASE_URL}/reset-password/{token}"
-            body = "\n\n".join([
-                "Entra aquí para restablecer tu contraseña de MachReach:",
-                reset_link,
-                "Este enlace vence en 1 hora.",
-                "Si no lo pediste, ignora este correo.",
-            ])
+            # The token is minted by the worker at send time, so a retried
+            # delivery mails a link valid for its full hour — and no request
+            # thread ever waits on SMTP.
+            from machreach_core.verification_delivery import queue_password_reset
             try:
-                _send_system_email(email, "MachReach — Restablecer contraseña", body)
+                queue_password_reset(int(client["id"]))
             except Exception:
-                pass  # Don't reveal whether email was sent
+                pass  # Don't reveal whether email was queued
         # Same answer either way, so the page can never be used to discover
         # which addresses have an account.
         return redirect(url_for("forgot_password", sent="1", email=email))

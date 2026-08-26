@@ -142,6 +142,9 @@ def test_signup_route_rewards_inviter_after_verify(make_user, client, monkeypatc
     assert sdb.referral_count(owner) == 0
     assert ssub.get_tier(owner) == "free"
 
+    # The request queues the verification email; the worker sends it.
+    import worker
+    worker.process_async_jobs()
     match = re.search(r"/verify-email/([A-Za-z0-9_-]+)", sent[-1])
     assert match
     client.get(f"/verify-email/{match.group(1)}")

@@ -374,6 +374,11 @@ def process_async_jobs():
         from app import _send_system_email
         from machreach_core.verification_delivery import process_job
         process_job(job, _send_system_email)
+    for job in claim_async_jobs("password_reset_email", limit=5, progress="Sending password reset email..."):
+        processed += 1
+        from app import _send_system_email
+        from machreach_core.verification_delivery import process_reset_job
+        process_reset_job(job, _send_system_email)
     if processed:
         print(f"[ASYNC JOBS] Processed {processed} job(s).")
 
