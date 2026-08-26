@@ -1868,6 +1868,54 @@ def profile_picture_version(client_id: int) -> str:
     return _hashlib.sha1(str(row["updated_at"] or "").encode("utf-8")).hexdigest()[:10]
 
 
+def profile_picture_versions(client_ids) -> dict[int, str]:
+    """Cache-busting tokens for many avatars in one query.
+
+    profile_picture_version() costs a query per student, which a hundred-row
+    leaderboard turns into a hundred of them. Students with no avatar are
+    simply absent from the result.
+    """
+    ids = sorted({int(cid) for cid in (client_ids or []) if cid})
+    if not ids:
+        return {}
+    placeholders = ", ".join(["%s"] * len(ids))
+    try:
+        with get_db() as db:
+            rows = _fetchall(
+                db,
+                "SELECT client_id, updated_at FROM student_profile_pictures "
+                f"WHERE client_id IN ({placeholders})",
+                tuple(ids),
+            ) or []
+    except Exception:
+        return {}
+    return {
+        int(row["client_id"]): _hashlib.sha1(
+            str(row.get("updated_at") or "").encode("utf-8")
+        ).hexdigest()[:10]
+        for row in rows
+    }
+
+
+def profile_picture_url(client_id: int, version: str = "") -> str:
+    """The avatar URL for a student, or "" when they never uploaded one.
+
+    One builder for every surface that draws a face, so the cache-busting
+    query string cannot be spelled three different ways.
+    """
+    version = version if version != "" else profile_picture_version(client_id)
+    return f"/student/profile/picture/{int(client_id)}?v={version}" if version else ""
+
+
+def profile_picture_urls(client_ids) -> dict[int, str]:
+    """Avatar URL per student, in one query. Absent when there is no avatar."""
+    return {
+        cid: profile_picture_url(cid, version)
+        for cid, version in profile_picture_versions(client_ids).items()
+        if version
+    }
+
+
 def delete_profile_picture(client_id: int) -> dict:
     with get_db() as db:
         _exec(db, "DELETE FROM student_profile_pictures WHERE client_id = %s", (client_id,))
@@ -6170,6 +6218,11 @@ def search_users(query: str, exclude_client_id: int | None = None, limit: int = 
         out.append({"id": rid, "name": r.get("name") or ""})
         if len(out) >= limit:
             break
+    # Faces for the whole result set in one query. Still no email: the avatar
+    # is already visible to any signed-in student.
+    pictures = profile_picture_urls([row["id"] for row in out])
+    for row in out:
+        row["picture_url"] = pictures.get(int(row["id"]), "")
     return out
 
 

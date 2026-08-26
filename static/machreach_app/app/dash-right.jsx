@@ -31,7 +31,7 @@ function League({ data = {} }) {
         {board.length ? board.map((b, i) => (
           <div className={"lb" + (b.me ? " me" : "")} key={i}>
             <span className="r">{b.r}º</span>
-            <span className="av" style={{ background: AV[i % AV.length] }}>{initials(b.n)}</span>
+            <span className="av" style={{ background: AV[i % AV.length] }}><AvatarFace url={b.pic}>{initials(b.n)}</AvatarFace></span>
             <span className="n">{b.n}</span>
             <span className="x num">{b.xp}</span>
           </div>
@@ -100,7 +100,7 @@ function Friends({ data = {} }) {
       <div>
         {friends.length ? friends.map((f, i) => (
           <div className="fr" key={i}>
-            <div className="fr-av" style={{ background: AV[(i + 2) % AV.length] }}>{initials(f.n)}<span className={"pres" + (f.on ? " on" : "")} /></div>
+            <div className="fr-av" style={{ background: AV[(i + 2) % AV.length] }}><AvatarFace url={f.pic}>{initials(f.n)}</AvatarFace><span className={"pres" + (f.on ? " on" : "")} /></div>
             <div style={{ minWidth: 0 }}>
               <div className="fr-n">{f.n}</div>
               <div className={"fr-s" + (f.on ? " on" : "")}>{f.s}</div>

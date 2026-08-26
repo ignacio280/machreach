@@ -119,7 +119,9 @@ function Arena({ scope, period, rows = NAMES, loading = false, heading = "" }) {
             <Pod className={"pod p" + (i + 1)} key={n} style={{ "--pd": [180, 0, 340][i] + "ms" }}
               href={href || undefined} title={href ? "Ver el perfil de " + n : undefined}>
               <div className="pod-medal">{medals[i]}</div>
-              <div className="pod-av" style={{ background: raw?.avatar_color || AV[i % AV.length] }}>{initials2(n)}</div>
+              <div className="pod-av" style={{ background: raw?.avatar_color || AV[i % AV.length] }}>
+                <AvatarFace url={raw?.picture_url}>{initials2(n)}</AvatarFace>
+              </div>
               <div className="pod-n">{n}</div>
               <div className="pod-u">{u}</div>
               <div className="pod-xp num"><CountXP v={xp} d={[180, 0, 340][i]} /> XP</div>
@@ -156,7 +158,9 @@ function Board({ scope, period, rows: allRows = NAMES, loading = false }) {
             <Row className={"lbrow" + (me ? " me" : "")} style={{ "--rd": i * 70 + "ms" }}
               href={href || undefined} title={href ? "Ver el perfil de " + n : undefined}>
               <span className="rk num">{rank}º</span>
-              <span className="av2" style={{ background: raw?.avatar_color || AV[(i + 3) % AV.length] }}>{initials2(n)}</span>
+              <span className="av2" style={{ background: raw?.avatar_color || AV[(i + 3) % AV.length] }}>
+                <AvatarFace url={raw?.picture_url}>{initials2(n)}</AvatarFace>
+              </span>
               <span className="who"><span className="nm2">{n}{me && " · tú"}</span><span className="mt">{u}</span></span>
               {pz > 0 && <span className="prz">🪙 +{pz}</span>}
               <span className="xp2 num"><CountXP v={xp} d={i * 70} /></span>

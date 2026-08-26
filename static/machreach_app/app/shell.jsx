@@ -19,6 +19,17 @@ function Overlay({ children }) {
 const SHELL_DATA = window.__MACHREACH_APP__ || window.__MACHREACH_DASHBOARD__ || {};
 const SHELL_EN = SHELL_DATA.lang === "en";
 
+/* The uploaded avatar, wherever a student's face is drawn — the ranking, the
+   friends list, the dashboard, the topbar. Falls back to the initials the
+   caller passes when there is no picture, which is also what the server sends
+   for a student who never uploaded one. Every avatar element is a circle with
+   a background colour, so the image fills it and inherits its radius. */
+const AVATAR_IMG_STYLE = { width: "100%", height: "100%", borderRadius: "inherit", objectFit: "cover", display: "block" };
+function AvatarFace({ url, children }) {
+  if (!url) return children;
+  return <img src={url} alt="" style={AVATAR_IMG_STYLE} />;
+}
+
 function Ring({ pct, size = 34, sw = 5, color = "var(--brand)", label }) {
   const r = (size - sw) / 2 - 1, c = 2 * Math.PI * r;
   return (
@@ -344,9 +355,7 @@ function Topbar({ title, sub, streak, xp, coins, freezes, plus = false, tweaks, 
             <button type="submit" className="icon-btn" aria-label={SHELL_EN ? "Log out" : "Cerrar sesión"} title={SHELL_EN ? "Log out" : "Cerrar sesión"}><IconLogout size={17} /></button>
           </form>
           <a href="/student/profile" className="avatar" style={{ background: SHELL_DATA.avatar_color || "#FFD3A8" }} aria-label={SHELL_EN ? "Profile" : "Perfil"}>
-            {SHELL_DATA.avatar_url
-              ? <img src={SHELL_DATA.avatar_url} alt="" style={{ width: "100%", height: "100%", borderRadius: "inherit", objectFit: "cover", display: "block" }} />
-              : avatar}
+            <AvatarFace url={SHELL_DATA.avatar_url}>{avatar}</AvatarFace>
           </a>
         </div>
       </div>

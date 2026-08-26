@@ -32,7 +32,7 @@ function FriendRow({ u, kind, onAct, i = 0 }) {
           them stay outside the link so Aceptar/Bloquear cannot navigate. */}
       <a className="fr-open" href={"/student/profile/" + u.id} title={"Ver el perfil de " + u.n}>
         <div className="fr-avatar" style={{ background: AV[u.id % AV.length] }}>
-          {ini3(u.n)}
+          <AvatarFace url={u.pic}>{ini3(u.n)}</AvatarFace>
           {kind === "friend" && <span className={"dot2" + (u.on ? " on" : "")} />}
         </div>
         <div className="fr-who">
@@ -92,7 +92,7 @@ function SearchCard({ onSend, data = {} }) {
     if (!data.live) return setRes(SEARCHABLE.filter((u) => u.n.toLowerCase().includes(q.trim().toLowerCase()) || String(u.id).includes(q.trim())));
     const response = await fetch("/api/student/friends/search?q=" + encodeURIComponent(q.trim()));
     const body = await response.json();
-    setRes((body.results || []).map((u) => ({ id: u.id, n: u.name || "Estudiante", s: [u.university, u.field_of_study].filter(Boolean).join(" · ") })));
+    setRes((body.results || []).map((u) => ({ id: u.id, n: u.name || "Estudiante", pic: u.picture_url || "", s: [u.university, u.field_of_study].filter(Boolean).join(" · ") })));
   };
   const toggleDiscovery = async () => {
     const next = !disc;

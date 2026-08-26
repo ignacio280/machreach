@@ -4379,6 +4379,12 @@ def register_student_routes(app, csrf, limiter):
                 }
             if _design_slug == "amigos":
                 _friend_state = sdb.list_friends(_cid()) or {}
+                # Every face on the page in one query, rather than one per row.
+                _friend_pictures = sdb.profile_picture_urls([
+                    int(_row.get("id") or 0)
+                    for _key in ("friends", "incoming", "outgoing")
+                    for _row in (_friend_state.get(_key) or [])
+                ])
                 def _friend_rows(_rows):
                     _out = []
                     for _row in (_rows or []):
@@ -4393,6 +4399,7 @@ def register_student_routes(app, csrf, limiter):
                             "on": bool(_row.get("online")),
                             "s": "En línea ahora" if _row.get("online") else "Activo recientemente",
                             "xp": f"{_friend_xp:,}".replace(",", "."),
+                            "pic": _friend_pictures.get(_friend_id, ""),
                         })
                     return _out
                 from student import subscription as ssub
@@ -8540,7 +8547,8 @@ Material:
 
         _dash_board = []
         for _idx, _row in enumerate(_mr_board):
-            _dash_board.append({"r": int(_row.get("rank") or (_mr_board_offset + _idx + 1)), "n": _row.get("name") or ("Student" if _is_en else "Estudiante"), "xp": f'{int(_row.get("xp") or 0):,}'.replace(",", "."), "me": int(_row.get("client_id") or 0) == cid})
+            # leaderboard() already decorated each row with its avatar.
+            _dash_board.append({"r": int(_row.get("rank") or (_mr_board_offset + _idx + 1)), "n": _row.get("name") or ("Student" if _is_en else "Estudiante"), "xp": f'{int(_row.get("xp") or 0):,}'.replace(",", "."), "me": int(_row.get("client_id") or 0) == cid, "pic": _row.get("picture_url") or ""})
 
         _dash_heat, _heat_day = [], _mr_heat_start
         for _ in range(35):
@@ -8552,10 +8560,11 @@ Material:
             _heat_day += _td_cls(days=1)
 
         _dash_friends = []
+        _dash_friend_pics = sdb.profile_picture_urls([int(f.get("id") or 0) for f in _mr_friends])
         for _friend in _mr_friends:
             _online = bool(_friend.get("online"))
             _friend_id = int(_friend.get("id") or 0)
-            _dash_friends.append({"n": _friend.get("name") or ("Friend" if _is_en else "Amigo"), "s": ("Online now" if _is_en else "En línea ahora") if _online else ("Recently active" if _is_en else "Activo recientemente"), "on": _online, "xp": f'{int(_mr_friend_xp.get(_friend_id, 0)):,}'.replace(",", ".")})
+            _dash_friends.append({"n": _friend.get("name") or ("Friend" if _is_en else "Amigo"), "s": ("Online now" if _is_en else "En línea ahora") if _online else ("Recently active" if _is_en else "Activo recientemente"), "on": _online, "xp": f'{int(_mr_friend_xp.get(_friend_id, 0)):,}'.replace(",", "."), "pic": _dash_friend_pics.get(_friend_id, "")})
 
         _level_number = 1
         for _idx, (_floor, _name) in enumerate(sdb.LEVEL_THRESHOLDS):

@@ -1012,12 +1012,19 @@ def _decorate_leaderboard_identity(out: list[dict], rows: list[dict]) -> None:
             parsed = {}
         prefs[int(row["id"])] = parsed if isinstance(parsed, dict) else {}
 
+    # One query for every avatar on the board, not one per row.
+    from student import db as _sdb
+    picture_urls = _sdb.profile_picture_urls(ids)
+
     university_names: dict[int, str] = {}
     major_names: dict[int, str] = {}
     for row in out:
         source = by_client.get(int(row["client_id"])) or {}
         setting = prefs.get(int(row["client_id"])) or {}
         row["avatar_color"] = str(setting.get("profile_avatar") or DEFAULT_AVATAR_COLOR)
+        # The uploaded avatar, which every signed-in student may already see
+        # (student_profile_picture serves it). "" means initials.
+        row["picture_url"] = picture_urls.get(int(row["client_id"]), "")
 
         university_id = int(source.get("university_id") or 0)
         if university_id and setting.get("show_university", True) is not False:

@@ -120,3 +120,66 @@ def test_profile_picture_is_not_served_to_anonymous_visitors(client, make_user):
     assert client.get(f"/student/profile/picture/{client_id}").status_code == 401
     # Uploading without a session never reaches the handler — CSRF stops it first.
     assert client.post("/api/student/profile/picture").status_code == 400
+
+
+def test_an_uploaded_avatar_reaches_every_surface_that_draws_a_face(client, make_user):
+    """The avatar used to appear only on its owner's own pages. Everywhere a
+    student sees somebody else — the ranking, the friends list, the dashboard,
+    friend search — drew initials, because those payloads never carried a
+    picture URL at all."""
+    viewer = _student(client, make_user, name="Avatar Viewer")
+    star = make_user(name="Star Student")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (star,))
+    sdb.set_profile_picture(star, PNG_1PX)
+    sdb.award_xp(star, "test", 900, "avatar surfaces")
+    sdb.award_xp(viewer, "test", 100, "avatar surfaces")
+    sdb.add_friend(viewer, star)
+    sdb.add_friend(star, viewer)
+    expected = f"/student/profile/picture/{star}?v={sdb.profile_picture_version(star)}"
+
+    board = client.get("/api/academic/leaderboard?scope=global").get_json()["rows"]
+    star_row = next(row for row in board if row["client_id"] == star)
+    assert star_row["picture_url"] == expected
+    # A student with no avatar still gets initials, not a broken image.
+    assert next(row for row in board if row["client_id"] == viewer)["picture_url"] == ""
+
+    friends = _app_payload(client.get("/student/friends").get_data(as_text=True))["friends"]
+    assert next(row["pic"] for row in friends["friends"] if row["id"] == star) == expected
+
+    dashboard = json.loads(
+        re.search(
+            r"window\.__MACHREACH_DASHBOARD__=(\{.*?\});</script>",
+            client.get("/student").get_data(as_text=True),
+            re.S,
+        ).group(1)
+    )
+    assert [row["pic"] for row in dashboard["friends"]["items"]] == [expected]
+    assert next(row["pic"] for row in dashboard["league"]["board"] if row["n"] == "Star Student") == expected
+
+    results = client.get("/api/student/friends/search?q=Star").get_json()["results"]
+    assert [row["picture_url"] for row in results] == [expected]
+    assert all("email" not in row for row in results)
+
+    profile = _app_payload(client.get(f"/student/profile/{star}").get_data(as_text=True))
+    assert profile["public_profile"]["picture_url"] == expected
+
+    served = client.get(expected)
+    assert served.status_code == 200
+    assert served.headers["Content-Type"] == "image/png"
+
+
+def test_avatar_versions_are_looked_up_in_one_query_for_a_whole_board(client, make_user):
+    """The per-student lookup costs a query each, which a full leaderboard
+    would turn into a hundred of them."""
+    with_picture = make_user(name="Batched One")
+    without = make_user(name="Batched Two")
+    sdb.set_profile_picture(with_picture, PNG_1PX)
+
+    versions = sdb.profile_picture_versions([with_picture, without, 99887765])
+
+    assert versions[with_picture] == sdb.profile_picture_version(with_picture)
+    assert without not in versions and 99887765 not in versions
+    assert sdb.profile_picture_versions([]) == {}
+    assert sdb.profile_picture_urls([without]) == {}
+    assert sdb.profile_picture_url(without) == ""
