@@ -17,7 +17,24 @@ services:
     # Threads are the cheap axis — requests here are IO-bound (Postgres, and
     # AI calls bounded to 40s via .with_options), so 8 threads on 0.5 CPU
     # trades idle wait, not compute.
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 120 --max-requests 5000 --max-requests-jitter 500
+    #
+    # --preload is what makes one worker survivable. Without it, every
+    # --max-requests recycle leaves the service with no worker at all while a
+    # replacement imports the application from scratch: 2.5s on a developer
+    # machine, several times that on half a shared CPU. Render kills an
+    # instance that cannot answer /health within five seconds, so a routine
+    # recycle read as a dead instance — that is the "HTTP health check failed
+    # (timed out after 5 seconds)" mail, and the page that would not load for
+    # whoever was mid-request. Preloaded, the app is imported once in the
+    # arbiter and a replacement worker is a fork: microseconds, no gap.
+    #
+    # Safe to fork here because nothing at import time owns a connection or a
+    # thread: the Postgres pool is lazy, migrations run in preDeployCommand
+    # rather than at import (test_gunicorn_preload_is_safe pins both), and the
+    # Sentry background worker re-spawns itself in the child on first use.
+    # It also makes the recycle do its job properly — the fresh worker forks
+    # from the arbiter's clean image, so whatever the old one leaked is gone.
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --preload --timeout 120 --max-requests 5000 --max-requests-jitter 500
     healthCheckPath: /health
     domains:
       - machreach.com
