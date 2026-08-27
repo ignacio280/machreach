@@ -22,6 +22,15 @@ An address that already has an account is left alone: silently resetting a
 password would be an account takeover if the address was ever typed wrong.
 Pass --reset-password to change an existing account's password on purpose.
 
+For an account that exists but is stuck unverified — they registered, the
+verification email never arrived, and login refuses them — pass --verify to
+flip only the verified flag, keeping the password they chose:
+
+    python scripts/provision_account.py someone@example.com --verify
+
+Marking verified also settles any stuck verification-email job for that
+account, so /health/operations clears with it.
+
 Whoever receives the account should change the password once they are in, since
 anyone who handled it on the way here has seen it.
 """
@@ -74,6 +83,21 @@ def _collect_password(password_env: str | None) -> str | None:
     return password
 
 
+def verify_existing(email: str) -> int:
+    """Mark an existing account's email verified, touching nothing else."""
+    existing = get_client_by_email(email)
+    if not existing:
+        print(f"No account exists for {email}. To create one, run without --verify.")
+        return 1
+    if existing.get("email_verified"):
+        print(f"#{existing['id']} {existing['email']} is already verified. Nothing changed.")
+        return 0
+    mark_email_verified(int(existing["id"]))
+    print(f"Marked #{existing['id']} {existing['email']} verified — their password is untouched.")
+    print("The login page will let this account through now.")
+    return 0
+
+
 def provision(email: str, name: str, password: str, *, reset_password: bool) -> int:
     existing = get_client_by_email(email)
     if existing and not reset_password:
@@ -115,7 +139,12 @@ def main(argv: list[str] | None = None) -> int:
         description="Create a verified MachReach account without sending email."
     )
     parser.add_argument("email", help="account email address")
-    parser.add_argument("--name", required=True, help="the person's display name")
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="the address already has an account: mark it verified and change nothing else",
+    )
+    parser.add_argument("--name", help="the person's display name (required unless --verify)")
     parser.add_argument(
         "--password-env",
         metavar="VAR",
@@ -131,6 +160,14 @@ def main(argv: list[str] | None = None) -> int:
     email = args.email.strip()
     if "@" not in email:
         parser.error("that does not look like an email address")
+
+    if args.verify:
+        if args.reset_password or args.password_env:
+            parser.error("--verify changes only the verified flag; drop the password options")
+        return verify_existing(email)
+
+    if not args.name:
+        parser.error("--name is required when creating an account")
 
     password = _collect_password(args.password_env)
     if password is None:
