@@ -952,9 +952,11 @@ def register_student_routes(app, csrf, limiter):
 
     # Import here to avoid circular imports at module level
 
-    from student.canvas import NoTextLayer, extract_text_from_pdf, extract_text_from_docx, make_connect_token, revoke_connect_tokens, verify_connect_token
+    from student.canvas import NoTextLayer, make_connect_token, revoke_connect_tokens, verify_connect_token
 
     from student.analyzer import (generate_flashcards, generate_quiz)
+    from student.ai_gate import InlineAIBusy, inline_ai_slot
+    _AI_BUSY_MSG = 'La IA está atendiendo muchas solicitudes en este momento. Espera unos segundos e inténtalo de nuevo.'
 
     from student import db as sdb
     from student.removed_features import DEPRECATED_STUDENT_PATHS, REMOVED_API_PREFIXES
@@ -2531,12 +2533,13 @@ def register_student_routes(app, csrf, limiter):
             content = file_obj.read(10 * 1024 * 1024 + 1)
             if len(content) > 10 * 1024 * 1024:
                 return jsonify({"error": "Archivo demasiado grande (max 10MB)."}), 400
+            from student import extraction as _extraction
             try:
                 if fl.endswith(".pdf"):
-                    text = extract_text_from_pdf(content)
+                    text = _extraction.extract_pdf_text(content)
                     file_type = "pdf"
                 elif fl.endswith(".docx"):
-                    text = extract_text_from_docx(content)
+                    text = _extraction.extract_docx_text(content)
                     file_type = "docx"
                 else:
                     text = content.decode("utf-8", errors="ignore")
@@ -5178,13 +5181,18 @@ Material:
             )
             # Web-request context: bounded so a slow model cannot hold a
             # gunicorn thread to the 120s worker kill.
-            resp = _ai().with_options(timeout=40.0, max_retries=0).chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.25,
-                max_tokens=6000,
-                response_format={"type": "json_object"},
-            )
+            try:
+                with inline_ai_slot():
+                    resp = _ai().with_options(timeout=40.0, max_retries=0).chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.25,
+                        max_tokens=6000,
+                        response_format={"type": "json_object"},
+                    )
+            except InlineAIBusy:
+                ai_usage.fail(request_key, "inline AI at capacity")
+                raise
             ai_usage.settle(request_key)
             raw = (resp.choices[0].message.content or "").strip()
             data = json.loads(re.sub(r"^```json?\s*|\s*```$", "", raw))
@@ -5305,14 +5313,17 @@ Material:
             f"planner-material:{_cid()}:"
             f"{(request.headers.get('X-Idempotency-Key') or uuid4().hex)[:128]}"
         )
-        units = _planner_ai_material_units(
-            _cid(),
-            reservation_key,
-            course.get("name") or "Curso",
-            exam.get("name") or "Prueba",
-            source_text,
-            target_units,
-        )
+        try:
+            units = _planner_ai_material_units(
+                _cid(),
+                reservation_key,
+                course.get("name") or "Curso",
+                exam.get("name") or "Prueba",
+                source_text,
+                target_units,
+            )
+        except InlineAIBusy:
+            return jsonify({"error": _AI_BUSY_MSG, "retry": True}), 429
         if not units:
             units = _planner_fallback_units(source_text, target_units)
         return jsonify({"ok": True, "units": units, "files": file_payload})
@@ -5371,7 +5382,11 @@ Material:
                 return jsonify(saved)
             count = _sub.cap_questions(_cid(), 8)
             try:
-                questions = generate_quiz(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, difficulty="medium", count=count)
+                with inline_ai_slot():
+                    questions = generate_quiz(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, difficulty="medium", count=count)
+            except InlineAIBusy:
+                ai_usage.fail(reservation_key, "inline AI at capacity")
+                return jsonify({"error": _AI_BUSY_MSG, "retry": True}), 429
             except Exception as exc:
                 ai_usage.fail(reservation_key, str(exc))
                 raise
@@ -5404,7 +5419,11 @@ Material:
             return jsonify(saved)
         count = _sub.cap_cards(_cid(), 10)
         try:
-            cards = generate_flashcards(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, count=count)
+            with inline_ai_slot():
+                cards = generate_flashcards(course_name=course.get("name") or "Curso", topics=topics, source_text=source_text, count=count)
+        except InlineAIBusy:
+            ai_usage.fail(reservation_key, "inline AI at capacity")
+            return jsonify({"error": _AI_BUSY_MSG, "retry": True}), 429
         except Exception as exc:
             ai_usage.fail(reservation_key, str(exc))
             raise
@@ -15555,35 +15574,36 @@ No markdown, no code fences. ONLY JSON.
             # Web-request context: bounded so a slow model cannot hold a
             # gunicorn thread to the 120s worker kill (two attempts, 80s worst).
             _bounded_ai = _ai().with_options(timeout=40.0, max_retries=0)
-            try:
+            with inline_ai_slot():
+                try:
 
-                resp = _bounded_ai.chat.completions.create(
+                    resp = _bounded_ai.chat.completions.create(
 
-                    model="gpt-4o-mini",
+                        model="gpt-4o-mini",
 
-                    messages=[{"role": "user", "content": prompt}],
+                        messages=[{"role": "user", "content": prompt}],
 
-                    temperature=0.4,
+                        temperature=0.4,
 
-                    max_tokens=2000,
+                        max_tokens=2000,
 
-                    response_format={"type": "json_object"},
+                        response_format={"type": "json_object"},
 
-                )
+                    )
 
-            except Exception:
+                except Exception:
 
-                resp = _bounded_ai.chat.completions.create(
+                    resp = _bounded_ai.chat.completions.create(
 
-                    model="gpt-4o-mini",
+                        model="gpt-4o-mini",
 
-                    messages=[{"role": "user", "content": prompt}],
+                        messages=[{"role": "user", "content": prompt}],
 
-                    temperature=0.4,
+                        temperature=0.4,
 
-                    max_tokens=2000,
+                        max_tokens=2000,
 
-                )
+                    )
 
             raw = (resp.choices[0].message.content or "").strip()
             ai_usage.settle(analysis_reservation_key)
@@ -15726,15 +15746,17 @@ No markdown, no code fences. ONLY JSON.
 
         text = ""
 
+        from student import extraction as _extraction
+
         try:
 
             if fl.endswith(".pdf"):
 
-                text = extract_text_from_pdf(content)
+                text = _extraction.extract_pdf_text(content)
 
             elif fl.endswith(".docx"):
 
-                text = extract_text_from_docx(content)
+                text = _extraction.extract_docx_text(content)
 
             else:
 
