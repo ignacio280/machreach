@@ -7191,10 +7191,13 @@ FREE_STREAK_FREEZE_CAP = 3
 PAID_STREAK_FREEZE_CAP = 5
 
 
-def _streak_freeze_cap(client_id: int) -> int:
+def _streak_freeze_cap(client_id: int, db=None) -> int:
+    """Pass the open connection as ``db`` when called inside a transaction —
+    get_tier writes to the reward/wallet rows and must run on the same
+    connection, or the thread deadlocks against its own uncommitted work."""
     try:
         from student.subscription import get_tier
-        if get_tier(client_id) == "plus":
+        if get_tier(client_id, db=db) == "plus":
             return PAID_STREAK_FREEZE_CAP
     except Exception:
         pass
@@ -7339,7 +7342,7 @@ def _grant_weekly_free_freeze(db, client_id: int) -> None:
         # Grant if under cap. Paid plans can hold a few extra freezes through
         # Streak Insurance+.
         cur = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,)) or 0
-        if int(cur) < _streak_freeze_cap(client_id):
+        if int(cur) < _streak_freeze_cap(client_id, db=db):
             _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes + 1 WHERE client_id = %s",
                   (client_id,))
     except Exception as e:

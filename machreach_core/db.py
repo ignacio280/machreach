@@ -55,6 +55,15 @@ if _USE_PG:
                         # instead of handing us a silently-closed connection.
                         keepalives=1, keepalives_idle=30,
                         keepalives_interval=10, keepalives_count=3,
+                        # A transaction idle for two minutes is always a leak
+                        # in this codebase — a thread parked mid-transaction on
+                        # something that will never finish. Without this, the
+                        # locks it holds brick every later request that touches
+                        # the same rows, forever; with it, Postgres aborts the
+                        # transaction, the waiters proceed, and the parked
+                        # thread gets an error instead of the rows staying
+                        # locked until someone restarts a service.
+                        options="-c idle_in_transaction_session_timeout=120000",
                     )
         return _POOL
 else:

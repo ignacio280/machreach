@@ -598,22 +598,39 @@ def _effective_tier(prefs: dict) -> str:
     return "free"
 
 
-def get_tier(client_id: int) -> str:
-    """Return the effective Free or Plus tier. Defaults to Free."""
+def get_tier(client_id: int, db=None) -> str:
+    """Return the effective Free or Plus tier. Defaults to Free.
+
+    A caller already inside a transaction MUST pass its connection as ``db``.
+    This function writes — the promotional-bank reconciliation and the paid
+    benefits touch the same student_reward_state and student_wallet rows that
+    wallet callers hold locks on. Opening a second pooled connection from
+    inside such a transaction deadlocks the thread against itself: connection
+    B waits on connection A's uncommitted row, connection A's thread waits for
+    this function to return, and Postgres never detects it because half the
+    cycle lives in Python. That exact shape held one student's login hung
+    forever and ate a gunicorn thread each time they tried.
+    """
     try:
-        with get_db() as db:
-            subscription = _load_subscription_row(db, client_id)
-            prefs = {
-                "subscription": subscription,
-                # Also the moment a lapsed plan hands the student back their
-                # banked free weeks — no webhook has to land for that.
-                "plus_until": _reconcile_promotional_bank(db, client_id, subscription),
-            }
-            tier = _effective_tier(prefs)
-            _grant_paid_benefits(db, client_id, tier, subscription)
-        return tier
+        if db is not None:
+            return _tier_on(db, client_id)
+        with get_db() as owned:
+            return _tier_on(owned, client_id)
     except Exception:
         return "free"
+
+
+def _tier_on(db, client_id: int) -> str:
+    subscription = _load_subscription_row(db, client_id)
+    prefs = {
+        "subscription": subscription,
+        # Also the moment a lapsed plan hands the student back their
+        # banked free weeks — no webhook has to land for that.
+        "plus_until": _reconcile_promotional_bank(db, client_id, subscription),
+    }
+    tier = _effective_tier(prefs)
+    _grant_paid_benefits(db, client_id, tier, subscription)
+    return tier
 
 
 def get_subscription_state(client_id: int) -> dict:

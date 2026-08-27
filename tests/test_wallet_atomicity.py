@@ -100,3 +100,37 @@ def test_parallel_coin_rewards_repay_refund_debt_once(make_user):
     wallet = sdb.get_wallet(client_id)
     assert wallet["coin_debt"] == 0
     assert wallet["coins"] == 100
+
+
+def test_the_wallet_grant_never_opens_a_second_connection(make_user, monkeypatch):
+    """One student's login hung forever: get_wallet's weekly freeze grant held
+    the reward-state row uncommitted on connection A, then the plus-cap check
+    called get_tier, which opened connection B and upserted the same row — a
+    one-thread deadlock Postgres cannot detect, because half the cycle waits
+    in Python, not in the database. (On SQLite the same shape degraded
+    silently: connection B hit busy_timeout and get_tier fell back to "free",
+    which is why no test ever caught it.) Everything must run on the caller's
+    connection."""
+    import student.subscription as ssub
+
+    client_id = make_user("Deadlock Shape User")
+    ssub.set_tier(client_id, "plus")  # only plus tier reaches the upsert
+
+    # From here on, any pooled checkout inside the subscription module means
+    # the deadlock shape is back.
+    checkouts = []
+    real_get_db = ssub.get_db
+
+    def _recording_get_db():
+        checkouts.append(True)
+        return real_get_db()
+
+    monkeypatch.setattr(ssub, "get_db", _recording_get_db)
+
+    wallet = sdb.get_wallet(client_id)
+
+    assert checkouts == [], (
+        "get_tier opened its own connection inside get_wallet's transaction"
+    )
+    # And the grant still landed on the borrowed connection.
+    assert wallet["streak_freezes"] >= 1
