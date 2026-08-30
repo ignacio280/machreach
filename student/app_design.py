@@ -15,6 +15,8 @@ Regenerate after editing any source file.
 from __future__ import annotations
 
 import base64
+import datetime
+import decimal
 import json
 from pathlib import Path
 
@@ -91,6 +93,30 @@ def render_design_page(slug: str) -> str | None:
     return artifact.read_text(encoding="utf-8")
 
 
+def _json_safe(value):
+    """Last-resort encoder for a value a payload builder left unconverted.
+
+    Every page payload is assembled by hand from database rows, and one column
+    that Postgres returns as a datetime — where SQLite returns TEXT, so the
+    tests stay green — used to raise straight out of json.dumps and 500 the
+    whole page. A student lost their entire planner over an unread timestamp.
+
+    Values still belong in the payload already converted; this only decides
+    whether a mistake costs a wrong-looking field or the page. Dates become
+    ISO strings, Decimals become numbers, and anything else becomes its str(),
+    which the browser can render even when it reads oddly.
+    """
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, decimal.Decimal):
+        return float(value)
+    if isinstance(value, (set, frozenset, tuple)):
+        return list(value)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return bytes(value).decode("utf-8", "replace")
+    return str(value)
+
+
 def render_live_page(slug: str, data: dict, version: str | None = None) -> str | None:
     """Return the exact Claude app shell wired to server-provided live data.
 
@@ -108,7 +134,12 @@ def render_live_page(slug: str, data: dict, version: str | None = None) -> str |
     payload = dict(data or {})
     payload["live"] = True
     encoded = base64.b64encode(
-        json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            default=_json_safe,
+        ).encode("utf-8")
     ).decode("ascii")
     styles = "".join(
         f'<link rel="stylesheet" href="/static/machreach_app/app/{name}?v={version}">'

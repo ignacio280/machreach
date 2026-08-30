@@ -3042,17 +3042,36 @@ def planner_mark_block(client_id: int, block_date: str, exam_id: int, unit_index
 
 
 def planner_done_blocks(client_id: int, since_date: str = "") -> list[dict]:
+    """Ticked-off planner blocks, in a shape that is safe to serialize.
+
+    Every caller puts these rows straight into a JSON payload, so the columns
+    are named rather than SELECT *'d and each value is coerced. done_at is
+    dropped: no caller reads it, and it is a TIMESTAMP on Postgres — psycopg2
+    hands back a real datetime, which json.dumps refuses, so a student with one
+    ticked block got a 500 on /student/planner. SQLite stores that column as
+    TEXT and serialized it happily, which is why the tests never saw it.
+    """
+    columns = "block_date, exam_id, unit_index, title, phase, minutes"
     with get_db() as db:
         if since_date:
             rows = _fetchall(db,
-                             "SELECT * FROM student_planner_done WHERE client_id = %s AND block_date >= %s "
+                             f"SELECT {columns} FROM student_planner_done "
+                             "WHERE client_id = %s AND block_date >= %s "
                              "ORDER BY block_date, id",
                              (client_id, since_date))
         else:
             rows = _fetchall(db,
-                             "SELECT * FROM student_planner_done WHERE client_id = %s ORDER BY block_date, id",
+                             f"SELECT {columns} FROM student_planner_done "
+                             "WHERE client_id = %s ORDER BY block_date, id",
                              (client_id,))
-        return [dict(r) for r in rows]
+    return [{
+        "block_date": str(row.get("block_date") or "")[:10],
+        "exam_id": int(row.get("exam_id") or 0),
+        "unit_index": int(row.get("unit_index") if row.get("unit_index") is not None else -1),
+        "title": row.get("title") or "",
+        "phase": row.get("phase") or "",
+        "minutes": int(row.get("minutes") or 0),
+    } for row in rows]
 
 
 def get_plan_for_week(client_id: int, week_start: str) -> dict | None:

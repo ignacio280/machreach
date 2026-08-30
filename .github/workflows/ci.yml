@@ -185,6 +185,7 @@ jobs:
           tests/test_canvas_reconciliation.py
           tests/test_removed_legacy_surface.py
           tests/test_leaderboard_prizes_comprehensive.py
+          tests/test_planner_stats_http_journey.py
 
   browser-journeys:
     runs-on: ubuntu-latest

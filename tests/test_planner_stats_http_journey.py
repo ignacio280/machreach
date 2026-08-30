@@ -452,3 +452,60 @@ def test_api_errors_are_json_not_an_html_page(client, make_user):
     assert missing.status_code == 404
     assert missing.get_json()["error"]
     assert "<!DOCTYPE" not in missing.get_data(as_text=True)
+
+
+def test_the_planner_page_survives_a_ticked_block(client, flask_app, make_user):
+    """A student with one ticked block got a 500 on /student/planner: done_at is
+    a TIMESTAMP on Postgres, psycopg2 returns a real datetime, SELECT * carried
+    it into the page payload, and json.dumps refused it. SQLite stores that
+    column as TEXT and serialized it happily, which is why every test passed
+    while production burned. Nothing the planner reads needs done_at, so the
+    query names its columns and coerces them."""
+    client_id = make_user("Planner Payload Student")
+    with get_db() as db:
+        _exec(db, "UPDATE clients SET academic_setup_complete = 1 WHERE id = %s", (client_id,))
+    with client.session_transaction() as session:
+        session["client_id"] = client_id
+        session["client_name"] = "Planner Payload Student"
+        session["account_type"] = "student"
+        session["session_version"] = 0
+        session["lang"] = "es"
+    sdb.planner_mark_block(client_id, "2099-08-03", 0, -1, "Repasar", "Estudiar", 45, True)
+
+    rows = sdb.planner_done_blocks(client_id, since_date="2099-08-01")
+
+    assert rows and rows[0]["title"] == "Repasar"
+    # The landmine column must not be in the payload at all, on any engine.
+    assert "done_at" not in rows[0]
+    # And whatever is there must survive the serializer the page uses.
+    json.dumps(rows)
+
+    response = client.get("/student/planner")
+    assert response.status_code == 200
+
+
+def test_a_payload_that_leaks_a_raw_database_value_does_not_break_the_page():
+    """Page payloads are assembled by hand from database rows, so one column
+    left unconverted must cost a wrong-looking field, never the whole page."""
+    import decimal
+    from student.app_design import render_live_page
+
+    payload = {
+        "plan": {
+            "when": datetime(2026, 8, 30, 21, 12, 4),
+            "day": date(2026, 8, 30),
+            "amount": decimal.Decimal("12.50"),
+            "raw": b"bytes",
+        }
+    }
+
+    markup = render_live_page("plan", payload)
+
+    assert markup
+    decoded = json.loads(
+        base64.b64decode(re.search(r'atob\("([A-Za-z0-9+/=]+)"\)', markup).group(1))
+    )
+    assert decoded["plan"]["when"] == "2026-08-30T21:12:04"
+    assert decoded["plan"]["day"] == "2026-08-30"
+    assert decoded["plan"]["amount"] == 12.5
+    assert decoded["plan"]["raw"] == "bytes"
