@@ -10,7 +10,7 @@ import json as _json
 import logging
 import re
 import unicodedata
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 from datetime import UTC
 from zoneinfo import ZoneInfo
@@ -5054,12 +5054,57 @@ def get_xp_history(client_id: int, limit: int = 30) -> list[dict]:
         )
 
 
+def _freeze_stock_floor(client_id: int) -> "date | None":
+    """The earliest day this student's freezes are allowed to cover.
+
+    The streak walk goes back over a student's whole history, and it used to
+    spend freezes on every gap it found down there. So a student bought
+    freezes, returned to the dashboard, and the wallet emptied itself into
+    months-old gaps before the page even rendered — coins gone, freezes gone,
+    nothing they could see for it. ("Compro, me descuenta la plata, vuelvo al
+    inicio y las weas desaparecen.")
+
+    A freeze cannot protect a day that was already lost before the student
+    owned it. student_wallet.freezes_since records the day the current stock
+    started existing, so freezes bought today cover today onward, while a
+    stock held since last month still covers the gaps that opened under it.
+    An empty value means the stock predates this column: treat it as usable
+    from today, which never spends a freeze on history it cannot justify.
+    """
+    with get_db() as db:
+        raw = _fetchval(
+            db,
+            "SELECT freezes_since FROM student_wallet WHERE client_id = %s",
+            (client_id,),
+        )
+    stamp = str(raw or "")[:10]
+    if not stamp:
+        return None
+    try:
+        return datetime.strptime(stamp, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _mark_freeze_stock(db, client_id: int, today) -> None:
+    """Stamp when a stock of freezes began, if it is not already stamped."""
+    _exec(
+        db,
+        "UPDATE student_wallet SET freezes_since = %s "
+        "WHERE client_id = %s AND COALESCE(freezes_since, '') = ''",
+        (today.isoformat(), client_id),
+    )
+
+
 def get_streak_days(client_id: int) -> int:
     """Count consecutive days with XP activity ending today.
 
     A user gets ONE auto-applied streak freeze per ISO week: a single missed
     day inside that week does not break the streak. The freeze is recorded
     in `student_streak_freezes` the first time the gap is observed.
+
+    Bought freezes are spent only on gaps within PURCHASED_FREEZE_WINDOW_DAYS
+    of today; anything older is settled history and must not cost coins.
     """
     with get_db() as db:
         rows = _fetchall(
@@ -5088,6 +5133,7 @@ def get_streak_days(client_id: int) -> int:
     # Track freezes already used per ISO week
     weeks_used = {(d.isocalendar()[0], d.isocalendar()[1]) for d in existing_freezes}
     new_freezes: list = []  # tuples (date, year, week)
+    stock_floor = _freeze_stock_floor(client_id)
     streak = 0
     cur = today
     # Allow today to be missing without breaking — streak shows yesterday's count
@@ -5112,12 +5158,15 @@ def get_streak_days(client_id: int) -> int:
             streak += 1
             cur = cur - timedelta(days=1)
             continue
-        # Try to auto-consume a wallet streak freeze (Duolingo-style).
-        # Only consumes if the user has bought freezes in the shop.
-        try:
-            spent = _consume_wallet_freeze_for_date(client_id, cur)
-        except Exception:
-            spent = False
+        # Try to auto-consume a wallet streak freeze (Duolingo-style). Only
+        # for a day the student already owned freezes on: a freeze bought
+        # today cannot un-break a streak that broke last month.
+        spent = False
+        if stock_floor is not None and cur >= stock_floor:
+            try:
+                spent = _consume_wallet_freeze_for_date(client_id, cur)
+            except Exception:
+                spent = False
         if spent:
             existing_freezes.add(cur)
             new_freezes.append((cur, iso[0], iso[1]))
@@ -5182,6 +5231,13 @@ def _consume_wallet_freeze_for_date(client_id: int, target_date) -> bool:
             db,
             "UPDATE student_wallet SET streak_freezes = streak_freezes - 1 "
             "WHERE client_id = %s AND streak_freezes > 0",
+            (client_id,),
+        )
+        # An empty stock has no start date; the next one stamps its own.
+        _exec(
+            db,
+            "UPDATE student_wallet SET freezes_since = '' "
+            "WHERE client_id = %s AND streak_freezes <= 0",
             (client_id,),
         )
     earn_badge(client_id, "freeze_used")   # "Saved by Ice"
@@ -7254,13 +7310,29 @@ def init_wallet_table() -> None:
         "unlocked_banners TEXT DEFAULT '[\"default\"]', "
         "updated_at TIMESTAMP DEFAULT (datetime('now','localtime')))",
     )
-    for column, definition in (("coin_debt", "INTEGER NOT NULL DEFAULT 0"),):
+    for column, definition in (
+        ("coin_debt", "INTEGER NOT NULL DEFAULT 0"),
+        # The day the current stock of freezes started existing. A freeze
+        # cannot be spent on a day that was already lost before the student
+        # owned it — see _freeze_stock_floor.
+        ("freezes_since", "TEXT DEFAULT ''"),
+    ):
         try:
             with get_db() as db:
                 _exec(db, f"ALTER TABLE student_wallet ADD COLUMN {column} {definition}")
         except Exception as exc:
             if not _is_duplicate_column_error(exc):
                 raise
+    # Freezes a student is already holding predate the column, so stamp them
+    # as owned from today: they protect from here forward and are not spent on
+    # gaps that opened before anyone was tracking when the stock began.
+    with get_db() as db:
+        _exec(
+            db,
+            "UPDATE student_wallet SET freezes_since = %s "
+            "WHERE streak_freezes > 0 AND COALESCE(freezes_since, '') = ''",
+            (datetime.now(UTC).date().isoformat(),),
+        )
 
 
 def init_coin_pack_orders_table() -> None:
@@ -7364,6 +7436,7 @@ def _grant_weekly_free_freeze(db, client_id: int) -> None:
         if int(cur) < _streak_freeze_cap(client_id, db=db):
             _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes + 1 WHERE client_id = %s",
                   (client_id,))
+            _mark_freeze_stock(db, client_id, user_date(client_id, db=db))
     except Exception as e:
         log.exception("weekly free freeze grant failed: %s", e)
 
@@ -7564,6 +7637,9 @@ def buy_streak_freeze(client_id: int, qty: int = 1, bundle: bool = False) -> dic
             "WHERE client_id = %s AND coins >= %s AND streak_freezes + %s <= %s",
             (cost, qty, client_id, cost, qty, cap),
         )
+        if changed.rowcount:
+            # These freezes protect from today forward, not backwards.
+            _mark_freeze_stock(db, client_id, user_date(client_id, db=db))
         new = _fetchone(db, "SELECT coins, streak_freezes FROM student_wallet WHERE client_id = %s", (client_id,))
         if not changed.rowcount:
             if int(new.get("streak_freezes") or 0) + qty > cap:
@@ -7987,6 +8063,8 @@ def use_streak_freeze(client_id: int) -> dict:
         )
         _exec(db, "UPDATE student_wallet SET streak_freezes = streak_freezes - 1 WHERE client_id = %s",
               (client_id,))
+        _exec(db, "UPDATE student_wallet SET freezes_since = '' "
+                  "WHERE client_id = %s AND streak_freezes <= 0", (client_id,))
         new_owned = _fetchval(db, "SELECT streak_freezes FROM student_wallet WHERE client_id = %s",
                               (client_id,)) or 0
     earn_badge(client_id, "freeze_used")   # "Saved by Ice"

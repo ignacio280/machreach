@@ -546,6 +546,8 @@ def _grant_paid_benefits(
                     "UPDATE student_wallet SET streak_freezes = streak_freezes + %s WHERE client_id = %s",
                     (PLUS_MONTHLY_STREAK_FREEZES, client_id),
                 )
+                # Protects from today forward, like any other freeze.
+                sdb._mark_freeze_stock(db, client_id, sdb.user_date(client_id, db=db))
             changed = True
 
     with _optional_db_work(db, "member_badge", client_id):

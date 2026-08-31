@@ -40,13 +40,22 @@ def _award_xp_on(client_id, *days):
             )
 
 
-def _grant_streak_freezes(client_id, count):
+def _grant_streak_freezes(client_id, count, owned_since=None):
+    """Give the student freezes they already own.
+
+    owned_since is the day the stock started existing, because a freeze only
+    covers days the student was already holding it for. It defaults to well
+    before the window these tests look at, which is what "the student owns
+    freezes" has always meant here; pass _TODAY to model a purchase made now.
+    """
+    since = owned_since if owned_since is not None else _TODAY - timedelta(days=60)
     with get_db() as db:
         sdb._ensure_wallet(db, client_id)
         _exec(
             db,
-            "UPDATE student_wallet SET streak_freezes = %s WHERE client_id = %s",
-            (count, client_id),
+            "UPDATE student_wallet SET streak_freezes = %s, freezes_since = %s "
+            "WHERE client_id = %s",
+            (count, since.isoformat(), client_id),
         )
 
 
@@ -133,3 +142,57 @@ def test_a_user_with_no_activity_at_all_has_no_streak(make_user):
 
     with use_clock(FrozenClock(_NOW)):
         assert sdb.get_streak_days(cid) == 0
+
+
+def test_freezes_bought_today_are_not_spent_on_days_already_lost(make_user):
+    """The reported bug, in the student's words: "Compro, me descuenta la
+    plata, vuelvo al inicio y las weas desaparecen."
+
+    The streak walk goes back over the whole history, and it used to spend a
+    freeze on every gap it found down there. Buying three and opening the
+    dashboard emptied the wallet into months-old gaps before the page rendered
+    — the coins were gone, the freezes were gone, and the only thing bought
+    was a bigger number the student never asked for. A freeze cannot protect a
+    day that was already lost before they owned it.
+    """
+    cid = make_user("Bought Today User")
+    _grant_streak_freezes(cid, 3, owned_since=_TODAY)
+    # Two gaps in this week, so a freeze is what the walk would reach for.
+    _award_xp_on(cid, _TODAY, _TODAY - timedelta(days=3), _TODAY - timedelta(days=4))
+
+    with use_clock(FrozenClock(_NOW)):
+        streak = sdb.get_streak_days(cid)
+
+    assert _owned_freezes(cid) == 3
+    # Today, plus the one gap the free weekly freeze still forgives.
+    assert streak == 2
+
+
+def test_a_freeze_still_covers_a_day_missed_while_the_student_held_it(make_user):
+    """The other half: the thing they paid for has to actually work."""
+    cid = make_user("Held It Already User")
+    _grant_streak_freezes(cid, 2, owned_since=_TODAY - timedelta(days=30))
+    _award_xp_on(cid, _TODAY, _TODAY - timedelta(days=3))
+
+    with use_clock(FrozenClock(_NOW)):
+        streak = sdb.get_streak_days(cid)
+
+    assert streak == 4
+    assert _owned_freezes(cid) == 1
+
+
+def test_an_emptied_stock_forgets_its_start_date(make_user):
+    """Otherwise the next purchase would inherit the old stock's window and
+    reach back into days it never covered."""
+    cid = make_user("Emptied Stock User")
+    _grant_streak_freezes(cid, 1, owned_since=_TODAY - timedelta(days=30))
+    _award_xp_on(cid, _TODAY, _TODAY - timedelta(days=3))
+
+    with use_clock(FrozenClock(_NOW)):
+        sdb.get_streak_days(cid)
+
+    assert _owned_freezes(cid) == 0
+    with get_db() as db:
+        assert not (_fetchval(
+            db, "SELECT freezes_since FROM student_wallet WHERE client_id = %s", (cid,)
+        ) or "")
