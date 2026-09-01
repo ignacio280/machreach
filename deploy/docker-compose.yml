@@ -1,0 +1,108 @@
+# The whole production stack on one small server: Postgres, the web service,
+# the always-on worker (five-second job pickup, exactly as on Render), and
+# Caddy for HTTPS. `.env` next to this file holds the secrets (see
+# env.example); deploy.sh is the only thing that should run `compose up`.
+name: machreach
+
+x-app: &app
+  image: machreach/app:current
+  restart: unless-stopped
+  env_file: .env
+  environment:
+    # Same variable names the app reads on Render. RENDER itself is not set;
+    # APP_ENV=production flips every production switch instead.
+    APP_ENV: production
+    PYTHONUNBUFFERED: "1"
+    DATABASE_URL: postgresql://machreach:${POSTGRES_PASSWORD}@db:5432/machreach
+    # Sized for 8 gunicorn threads plus background threads; Postgres here
+    # allows 100, and the worker adds a handful.
+    DB_POOL_MAX: "12"
+    # Set by deploy.sh to the deployed commit; keys every client-side cache.
+    RENDER_GIT_COMMIT: ${GIT_COMMIT:-}
+  depends_on:
+    db:
+      condition: service_healthy
+  logging:
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: machreach
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: machreach
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U machreach -d machreach"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  web:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    # Identical to the Render start command. One worker on purpose (the
+    # in-memory rate limiter is per process); --preload so a --max-requests
+    # recycle forks a replacement in microseconds instead of re-importing.
+    command: >-
+      gunicorn app:app --bind 0.0.0.0:5000 --workers 1 --threads 8 --preload
+      --timeout 120 --max-requests 5000 --max-requests-jitter 500
+    expose:
+      - "5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    <<: *app
+    command: python worker.py
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+      # Plain HTTP on 8080 for checking the box before DNS points at it.
+      - "8080:8080"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

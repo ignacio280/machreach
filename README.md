@@ -31,7 +31,8 @@ python -m pytest       # covers the money paths: subscriptions, referrals, focus
 app.py                   - Flask app shell: auth, layout, billing webhook, public/legal pages
 student/                 - Student dashboard, study tools, gamification, and APIs (registered as routes)
 machreach_core/          - Shared configuration, database, i18n, and billing infrastructure
-worker.py                - Student AI jobs, plan maintenance, streak reminders, and leaderboard reporting (long-running, or one pass with --once)
+worker.py                - Student AI jobs, plan maintenance, streak reminders, and leaderboard reporting
+deploy/                  - Single-server production stack (compose, Caddy, bootstrap, deploy and backup timers)
 extensions/focus-guard   - Focus Guard browser extension
 static/machreach_landing - Pre-built, pre-rendered React landing (see landing_build/)
 landing_build/           - Local-only landing build (esbuild + jsdom prerender; output committed)
@@ -40,13 +41,14 @@ docs/                    - Pitch and pricing docs
 ```
 
 ## Deployment
-Runs on Render (`render.yaml`) as a production gunicorn web service plus a
-cron job that runs `python worker.py --once` every minute, against a
-PostgreSQL database hosted on Neon (`DATABASE_URL` is set by hand on both
-services). The database move and cron cutover are documented in
-[docs/NEON_MIGRATION.md](docs/NEON_MIGRATION.md). Staging is an external
-release requirement and must be provisioned separately with isolated
-credentials before using the staging steps in the operations runbook.
+Runs on Render today (`render.yaml`): a gunicorn web service, an always-on
+worker, and a Render PostgreSQL database. It is moving to one small server
+running the stack in `deploy/` (Dockerfile, docker compose with Postgres and
+Caddy, auto-deploy from master after checks pass, nightly backups); the
+bootstrap, cutover, and rollback are in [docs/VPS_DEPLOY.md](docs/VPS_DEPLOY.md).
+Staging is an external release requirement and must be provisioned separately
+with isolated credentials before using the staging steps in the operations
+runbook.
 
 Production release, backup/restore, incident, rollback, retention, and alert
 procedures are documented in [docs/operations.md](docs/operations.md). Chile

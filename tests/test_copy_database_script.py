@@ -1,4 +1,4 @@
-"""scripts/migrate_to_neon.py copies a database and refuses to lie about it.
+"""scripts/copy_database.py copies a database and refuses to lie about it.
 
 The precondition and comparison logic runs everywhere. The end-to-end copy
 needs a Postgres superuser (to create the two throwaway databases) and a
@@ -19,11 +19,11 @@ import pytest
 from machreach_core import db as odb
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "scripts" / "migrate_to_neon.py"
+SCRIPT = REPO_ROOT / "scripts" / "copy_database.py"
 
 
 def _load_script():
-    spec = importlib.util.spec_from_file_location("migrate_to_neon", SCRIPT)
+    spec = importlib.util.spec_from_file_location("copy_database", SCRIPT)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

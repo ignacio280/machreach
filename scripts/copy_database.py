@@ -1,6 +1,10 @@
-"""Copy the production database from Render Postgres to Neon and prove it.
+"""Copy one Postgres database into another, empty one, and prove it.
 
-    python scripts/migrate_to_neon.py --source "$RENDER_EXTERNAL_URL" --target "$NEON_DIRECT_URL"
+    python scripts/copy_database.py --source "$OLD_URL" --target "$NEW_URL"
+
+Written for the move off Render's Postgres: to Neon, or to the Postgres on
+the VPS stack in deploy/. The target is any Postgres reachable from where
+this runs.
 
 What it does, in order, stopping at the first failure:
 
@@ -20,8 +24,8 @@ server (Render's Postgres version is in its dashboard; Neon runs 16 or 17).
 Run it from a laptop with both installed, not from a Render shell: the dump
 should never sit on a production instance's disk.
 
-The full runbook, including the cutover order and the rollback, is in
-docs/NEON_MIGRATION.md.
+The runbooks, including the cutover order and the rollback, are
+docs/VPS_DEPLOY.md (own server) and docs/NEON_MIGRATION.md (Render + Neon).
 """
 from __future__ import annotations
 

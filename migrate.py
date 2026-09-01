@@ -16,10 +16,9 @@ _MIGRATION_LOCK_ID = 4_624_686_952_405_553_101
 
 
 def migrate() -> None:
-    # Only the web service runs this as a pre-deploy step now, but an operator
-    # may also run it from a shell (a restore drill, a Neon cutover) while a
-    # deploy is in flight. A Postgres advisory lock serializes every caller
-    # without coupling migration state to a particular service instance.
+    # Both Render services may deploy together. A Postgres advisory lock makes
+    # their pre-deploy commands serialize without coupling migration state to a
+    # particular service instance.
     with get_db() as lock_db:
         if _USE_PG:
             _exec(lock_db, "SELECT pg_advisory_lock(%s)", (_MIGRATION_LOCK_ID,))

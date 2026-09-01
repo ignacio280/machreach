@@ -102,7 +102,7 @@ jobs:
             tests/test_extension.py tests/test_canvas_reconciliation.py \
             --cov=student.canvas --cov-report=term-missing \
             --cov-fail-under=90 -q
-          python -m pytest tests/test_worker_comprehensive.py \
+          python -m pytest tests/test_worker_comprehensive.py tests/test_worker_cron_mode.py \
             --cov=worker --cov-report=term-missing \
             --cov-fail-under=90 -q
           python -m pytest tests/test_analyzer.py \
@@ -187,7 +187,7 @@ jobs:
           tests/test_leaderboard_prizes_comprehensive.py
           tests/test_planner_stats_http_journey.py
           tests/test_db_pool_liveness.py
-          tests/test_migrate_to_neon_script.py
+          tests/test_copy_database_script.py
 
   browser-journeys:
     runs-on: ubuntu-latest

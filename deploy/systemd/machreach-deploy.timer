@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for a deployable MachReach commit every two minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+RandomizedDelaySec=20
+
+[Install]
+WantedBy=timers.target

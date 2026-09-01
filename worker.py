@@ -934,7 +934,7 @@ def _once_requested(argv: list[str] | None = None) -> bool:
     return "--once" in argv or (os.getenv("WORKER_MODE") or "").strip().lower() == "once"
 
 
-if __name__ == "__main__":
+def main(argv: list[str] | None = None) -> int:
     is_production = bool(os.getenv("RENDER")) or any(
         (os.getenv(name) or "").strip().lower() == "production"
         for name in ("FLASK_ENV", "APP_ENV", "ENVIRONMENT")
@@ -949,9 +949,9 @@ if __name__ == "__main__":
             raise
     check_schema_readiness()
 
-    if _once_requested():
+    if _once_requested(argv):
         run_once()
-        sys.exit(0)
+        return 0
 
     print("MachReach Uni worker started.")
 
@@ -978,3 +978,8 @@ if __name__ == "__main__":
         scheduler.start()
     except (KeyboardInterrupt, SystemExit):
         print("Worker stopped.")
+    return 0
+
+
+if __name__ == "__main__":
+    main()

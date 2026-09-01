@@ -199,3 +199,33 @@ def test_reservation_records_configurable_cost_estimate(make_user, monkeypatch):
 
     assert row["model"] == "cost-test-model"
     assert row["estimated_cost_micros"] == 200
+
+
+def test_schema_ddl_runs_once_per_process_and_outside_the_reserving_transaction(monkeypatch, make_user):
+    """Two reservations for one student used to deadlock on PostgreSQL: the
+    per-call CREATE INDEX IF NOT EXISTS held a table lock inside the
+    transaction that then waited on the other's client row. Now the DDL runs
+    once, in its own transaction, before any row lock."""
+    client_id = make_user("AI Schema Once", "ai-schema-once@example.test")
+    ai_usage.reserve(client_id, request_key="schema-once:1", feature="quiz_worker", usage_kind="quiz_generated")
+    assert ai_usage._SCHEMA_MIGRATED is True
+
+    calls = []
+    monkeypatch.setattr(ai_usage, "_exec", lambda db, sql, params=(): calls.append(sql) or (_ for _ in ()).throw(AssertionError("DDL ran again")))
+    with ai_usage.get_db() as db:
+        ai_usage._ensure_schema(db)
+    ai_usage.init_schema()
+    assert calls == []
+
+    # A fresh process does the DDL exactly once, then stops asking.
+    monkeypatch.undo()
+    monkeypatch.setattr(ai_usage, "_SCHEMA_MIGRATED", False)
+    seen = []
+    real_exec = ai_usage._exec
+    monkeypatch.setattr(ai_usage, "_exec", lambda db, sql, params=(): seen.append(sql.strip()[:12]) or real_exec(db, sql, params))
+    ai_usage.init_schema()
+    ai_usage.init_schema()
+    assert ai_usage._SCHEMA_MIGRATED is True
+    assert seen[0].startswith("CREATE TABLE")
+    assert seen[-1].startswith("CREATE INDEX")
+    assert sum(1 for s in seen if s.startswith("CREATE INDEX")) == 1

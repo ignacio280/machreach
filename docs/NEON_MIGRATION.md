@@ -1,10 +1,14 @@
-# Moving production Postgres to Neon and the worker to a cron job
+# Alternative: stay on Render, Postgres on Neon, worker as a cron job
 
-This is the runbook for the two infrastructure changes that took the Render
-bill from three paid resources (web service, always-on worker, Postgres) to
-one paid web service plus a per-second-billed cron job, with the database on
-Neon. The code on this branch already expects the new topology; this document
-is the operator's part.
+The chosen way off the three-resource Render bill is the single server in
+[VPS_DEPLOY.md](VPS_DEPLOY.md). This document is the other option, kept
+because the code supports it: keep the Render web service, move Postgres to
+Neon, and run the worker as a per-second-billed Render cron job. It costs
+about twice the VPS and adds job latency, but it needs no server of your own.
+
+`render.yaml` still describes the current always-on worker and Render
+database; applying this path means editing it as shown in *Blueprint
+changes* below.
 
 Nothing here is reversible in one click. Read it once end to end before the
 cutover window, and keep the Render database until the rollback window below
@@ -30,8 +34,9 @@ has passed.
   one product-visible trade-off of the cheaper worker. If it matters more
   than the saving, the old always-on `type: worker` block is in git history.
 - **Alerting**: `/health/operations` alerts when the heartbeat is older than
-  `WORKER_HEARTBEAT_STALE_SECONDS`, set to 180 in `render.yaml` (a scheduled
-  run can start late; the old two minutes assumed a beat every minute). A run
+  `WORKER_HEARTBEAT_STALE_SECONDS`; set it to 180 on the web service (a
+  scheduled run can start late; the default two minutes assumes a beat every
+  minute). A run
   beats once at start and every 30 seconds while it is busy.
 
 ## What could not be verified from this branch
@@ -48,8 +53,8 @@ written, so confirm these in the dashboards before the cutover:
    accordingly; the total is still well under the old bill either way.
 2. **Neon Free plan restore window.** Point-in-time restore on Free covers
    hours, not the days the old Render plan kept. See *Backups* below.
-3. **Render cron schedule.** `render.yaml` uses `* * * * *` (every minute,
-   UTC). If Render rejects it, use the smallest interval it accepts and raise
+3. **Render cron schedule.** The blueprint snippet below uses `* * * * *`
+   (every minute, UTC). If Render rejects it, use the smallest interval it accepts and raise
    `WORKER_HEARTBEAT_STALE_SECONDS` to three times that interval.
 4. **Blueprint sync behaviour for the removed database and the changed worker
    type.** Read the sync preview before confirming it. Expect the database to
@@ -79,7 +84,7 @@ written, so confirm these in the dashboards before the cutover:
 2. Copy production into it and verify the row counts:
 
    ```bash
-   python scripts/migrate_to_neon.py --source "$RENDER_EXTERNAL_URL" --target "$NEON_DIRECT_URL"
+   python scripts/copy_database.py --source "$RENDER_EXTERNAL_URL" --target "$NEON_DIRECT_URL"
    ```
 
    The script refuses identical URLs, a pooled Neon endpoint, and a target
@@ -113,7 +118,7 @@ this size takes a minute or two.
 2. Run the copy against the emptied Neon database and read the count table:
 
    ```bash
-   python scripts/migrate_to_neon.py --source "$RENDER_EXTERNAL_URL" --target "$NEON_DIRECT_URL" --dump-file ./cutover.dump
+   python scripts/copy_database.py --source "$RENDER_EXTERNAL_URL" --target "$NEON_DIRECT_URL" --dump-file ./cutover.dump
    ```
 
    Keep `cutover.dump`: it is the last full copy of the Render database and
@@ -135,11 +140,43 @@ this size takes a minute or two.
    `worker_heartbeat: ok` and no failed signals. `/admin/jobs` shows the last
    heartbeat and the four `worker_schedule` rows seeded by the first run.
 
-## Blueprint sync (after the cutover verified)
+## Blueprint changes
 
-Merge this branch. Render's Blueprint sync will show the removed
-`machreach-db` database and the `machreach-worker` service changing from a
-worker to a cron job. Confirm the preview matches that and nothing else.
+Edit `render.yaml`: delete the `databases:` block, change both services'
+`DATABASE_URL` to `sync: false`, add `WORKER_HEARTBEAT_STALE_SECONDS: "180"`
+to the web service, and replace the `type: worker` service with:
+
+```yaml
+  - type: cron
+    name: machreach-worker
+    runtime: python
+    plan: starter
+    schedule: "* * * * *"          # UTC; jobs keep Santiago times internally
+    autoDeployTrigger: checksPass
+    buildCommand: pip install --require-hashes -r requirements.lock
+    startCommand: python worker.py --once
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.12"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: WORKER_RUN_MAX_SECONDS
+        value: "50"
+      - key: DB_POOL_MAX
+        value: "4"
+      # ... plus the same secret keys the worker service had, all sync: false
+```
+
+Cron jobs have no `preDeployCommand`; migrations run in the web service's
+pre-deploy step, and a run that starts on a stale schema fails
+`check_schema_readiness()` and retries a minute later.
+
+Merge that edit after the cutover verified. Render's Blueprint sync will
+show the removed `machreach-db` database and the `machreach-worker` service
+changing from a worker to a cron job. Confirm the preview matches that and
+nothing else.
 When it asks for the cron job's `sync: false` values, paste the same
 `DATABASE_URL`, `SECRET_KEY`, `ENCRYPTION_KEY`, `ADMIN_ACTION_SECRET`,
 `OPERATIONS_SECRET`, SMTP, OpenAI, Lemon Squeezy, Sentry, and

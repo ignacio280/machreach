@@ -1,0 +1,8 @@
+[Unit]
+Description=Nightly MachReach database backup
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/machreach
+ExecStart=/opt/machreach/deploy/backup.sh

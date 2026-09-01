@@ -11,7 +11,6 @@ overlapping runs cannot both fire a job, a failing job is recorded as fired
 """
 from datetime import datetime, timedelta, timezone
 import json
-import runpy
 import sys
 import threading
 
@@ -279,30 +278,40 @@ def test_once_mode_is_requested_by_flag_or_environment(monkeypatch):
     assert worker._once_requested() is True
 
 
-def test_the_entrypoint_in_once_mode_runs_one_pass_and_exits_cleanly(monkeypatch):
+def test_the_entrypoint_in_once_mode_runs_one_pass_and_never_builds_a_scheduler(monkeypatch):
     import machreach_core.db as core_db
     from student import db as sdb
 
     runs = []
-    monkeypatch.setenv("WORKER_MODE", "once")
     monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("WORKER_MODE", raising=False)
     monkeypatch.setattr(core_db, "init_db", lambda: None)
-    monkeypatch.setattr(core_db, "check_schema_readiness", lambda: None)
+    monkeypatch.setattr(worker, "init_db", lambda: None)
+    monkeypatch.setattr(worker, "check_schema_readiness", lambda: None)
     monkeypatch.setattr(sdb, "init_student_db", lambda: None)
     monkeypatch.setattr(worker, "run_once", lambda: runs.append("run"))
+    monkeypatch.setattr(
+        worker, "BlockingScheduler",
+        lambda timezone: (_ for _ in ()).throw(AssertionError("once mode must not build a scheduler")),
+    )
 
-    class NeverStarted:
-        def __init__(self, timezone):
-            raise AssertionError("once mode must not build a scheduler")
+    assert worker.main(["--once"]) == 0
+    assert runs == ["run"]
 
-    import apscheduler.schedulers.blocking as blocking
-    monkeypatch.setattr(blocking, "BlockingScheduler", NeverStarted)
+    monkeypatch.setenv("WORKER_MODE", "once")
+    assert worker.main([]) == 0
+    assert runs == ["run", "run"]
 
-    with pytest.raises(SystemExit) as exit_info:
-        runpy.run_module("worker", run_name="__main__")
 
-    assert exit_info.value.code == 0
-    # run_module executes a fresh copy of the module, whose run_once is the
-    # real one; the monkeypatched name on the imported module is not it. What
-    # is pinned here is the mode selection and the clean exit.
-    assert exit_info.value.code == 0
+def test_the_entrypoint_reports_and_reraises_a_student_schema_failure(monkeypatch):
+    from student import db as sdb
+
+    reported = []
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.setattr(worker, "init_db", lambda: None)
+    monkeypatch.setattr(sdb, "init_student_db", lambda: (_ for _ in ()).throw(RuntimeError("no schema")))
+    monkeypatch.setattr(worker, "_report_worker_error", lambda ctx, exc: reported.append(ctx))
+
+    with pytest.raises(RuntimeError, match="no schema"):
+        worker.main(["--once"])
+    assert reported == ["STUDENT_DB_INIT"]

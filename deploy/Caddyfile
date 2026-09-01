@@ -1,0 +1,12 @@
+# Automatic HTTPS for the site domain (Let's Encrypt, renewed by Caddy) and a
+# plain-HTTP listener on 8080 for verifying the server before DNS moves.
+# Caddy adds X-Forwarded-For and X-Forwarded-Proto, which the app trusts in
+# production through ProxyFix.
+
+{$SITE_DOMAIN} {
+	reverse_proxy web:5000
+}
+
+:8080 {
+	reverse_proxy web:5000
+}

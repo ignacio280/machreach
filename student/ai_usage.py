@@ -26,9 +26,22 @@ def _now() -> datetime:
 
 
 def _ensure_schema(db) -> None:
+    """Create or upgrade the usage table, once per process.
+
+    Everything here is DDL, and on PostgreSQL even the no-op forms take
+    table locks that last until the transaction commits: ALTER TABLE takes an
+    exclusive lock, and CREATE INDEX IF NOT EXISTS takes a share lock before
+    it notices the index exists. Run inside reserve()'s transaction on every
+    call, that share lock deadlocked two concurrent reservations for the same
+    student: each held the table while waiting for the other's client row.
+    So the DDL runs at most once per process, and reserve() runs it in its
+    own transaction before taking any row lock.
+    """
     global _SCHEMA_MIGRATED
     from student.db import _USE_PG
 
+    if _SCHEMA_MIGRATED:
+        return
     timestamp = "TIMESTAMPTZ" if _USE_PG else "TEXT"
     _exec(
         db,
@@ -53,33 +66,35 @@ def _ensure_schema(db) -> None:
             ,result_json TEXT NOT NULL DEFAULT '{{}}'
         )""",
     )
-    if not _SCHEMA_MIGRATED:
-        from machreach_core.db import _is_duplicate_column_error
-        if _USE_PG:
+    from machreach_core.db import _is_duplicate_column_error
+    if _USE_PG:
+        _exec(
+            db,
+            "ALTER TABLE student_ai_usage ADD COLUMN IF NOT EXISTS "
+            "estimated_cost_micros BIGINT NOT NULL DEFAULT 0",
+        )
+    else:
+        try:
             _exec(
                 db,
-                "ALTER TABLE student_ai_usage ADD COLUMN IF NOT EXISTS "
+                "ALTER TABLE student_ai_usage ADD COLUMN "
                 "estimated_cost_micros BIGINT NOT NULL DEFAULT 0",
             )
-        else:
-            try:
-                _exec(
-                    db,
-                    "ALTER TABLE student_ai_usage ADD COLUMN "
-                    "estimated_cost_micros BIGINT NOT NULL DEFAULT 0",
-                )
-            except Exception as exc:
-                if not _is_duplicate_column_error(exc):
-                    raise
-        _SCHEMA_MIGRATED = True
+        except Exception as exc:
+            if not _is_duplicate_column_error(exc):
+                raise
     _exec(
         db,
         "CREATE INDEX IF NOT EXISTS idx_student_ai_usage_quota "
         "ON student_ai_usage(client_id, period_start_utc, period_end_utc, status)",
     )
+    _SCHEMA_MIGRATED = True
 
 
 def init_schema() -> None:
+    """Ensure the schema in a transaction of its own, holding no row locks."""
+    if _SCHEMA_MIGRATED:
+        return
     with get_db() as db:
         _ensure_schema(db)
 
@@ -106,10 +121,12 @@ def reserve(
     if not request_key:
         raise ValueError("request_key is required")
     now = _now()
+    # DDL first and separately: locks it takes are released before the
+    # serializing row lock below is requested.
+    init_schema()
     with get_db() as db:
         if not _USE_PG:
             db.execute("BEGIN IMMEDIATE")
-        _ensure_schema(db)
         _fetchone(
             db,
             "SELECT id FROM clients WHERE id = %s"

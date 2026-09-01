@@ -1,0 +1,76 @@
+#cloud-config
+# MachReach server: paste this whole file into the "Cloud config" / user data
+# box when creating an Ubuntu 24.04 server, after filling in the values in
+# the `content:` block below (they become /opt/machreach/deploy/.env).
+# Everything else is automatic: Docker, firewall, clone, database copy from
+# Render, HTTPS, auto-deploy and backup timers. Progress is logged to
+# /var/log/machreach-bootstrap.log; the last line prints the server's IP.
+
+package_update: true
+package_upgrade: true
+packages:
+  - git
+  - curl
+  - ufw
+  - docker.io
+  - docker-compose-v2
+  - unattended-upgrades
+
+write_files:
+  - path: /root/machreach.env
+    permissions: "0600"
+    content: |
+      # ---- fill these in (same values as the Render environment) ----------
+      SITE_DOMAIN=machreach.com
+      POSTGRES_PASSWORD=CHANGE-ME-long-random-string
+      RENDER_DATABASE_URL=postgresql://...external Render connection string...
+      SECRET_KEY=
+      ENCRYPTION_KEY=
+      ADMIN_ACTION_SECRET=
+      OPERATIONS_SECRET=
+      BASE_URL=https://machreach.com
+      SMTP_HOST=
+      SMTP_PORT=
+      SMTP_USER=
+      SMTP_PASSWORD=
+      OPENAI_API_KEY=
+      LEMON_SQUEEZY_API_KEY=
+      LEMON_SQUEEZY_STORE_ID=
+      LEMON_SQUEEZY_WEBHOOK_SECRET=
+      LS_PRODUCT_STUDENT_PLUS=
+      LS_VARIANT_STUDENT_PLUS=
+      LS_PRODUCT_COIN_SMALL=
+      LS_VARIANT_COIN_SMALL=
+      LS_PRODUCT_COIN_MEDIUM=
+      LS_VARIANT_COIN_MEDIUM=
+      LS_PRODUCT_COIN_LARGE=
+      LS_VARIANT_COIN_LARGE=
+      LS_PRODUCT_COIN_MEGA=
+      LS_VARIANT_COIN_MEGA=
+      LS_PRODUCT_COIN_ULTRA=
+      LS_VARIANT_COIN_ULTRA=
+      SENTRY_DSN=
+      POSTHOG_KEY=
+      POSTHOG_HOST=
+      LEADERBOARD_WINNERS_RECIPIENT=
+      # ---- defaults, leave as they are ------------------------------------
+      LEMON_SQUEEZY_TEST_MODE=false
+      AI_PLUS_MONTHLY_LIMIT=100
+      AI_USER_DAILY_MAX=120
+      AI_GLOBAL_DAILY_MAX=5000
+      AI_USER_DAILY_TOKEN_MAX=1000000
+      AI_GLOBAL_DAILY_TOKEN_MAX=25000000
+      AI_ESTIMATED_INPUT_USD_PER_MILLION=0.15
+      AI_ESTIMATED_OUTPUT_USD_PER_MILLION=0.60
+      REFERRAL_REWARD_30D_MAX=20
+      ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS=30
+      RATELIMIT_STORAGE_URI=memory://
+
+runcmd:
+  - systemctl enable --now docker
+  # The branch to run. Switch to master on the server (git checkout master)
+  # once this work is merged; deploy.sh follows whatever branch is checked out.
+  - git clone --branch claude/migrate-db-neon-s8wi9d https://github.com/ignacio280/machreach /opt/machreach
+  - install -m 600 /root/machreach.env /opt/machreach/deploy/.env
+  - rm -f /root/machreach.env
+  - bash /opt/machreach/deploy/bootstrap.sh 2>&1 | tee /var/log/machreach-bootstrap.log
