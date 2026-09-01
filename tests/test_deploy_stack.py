@@ -53,15 +53,15 @@ def test_the_stack_has_every_role_render_had():
     assert "DATABASE_URL: postgresql://machreach:${POSTGRES_PASSWORD}@db:5432/machreach" in compose
 
 
-def test_the_env_template_and_cloud_init_carry_every_secret_the_render_worker_needs():
+def test_the_env_template_and_cloud_init_carry_every_secret_the_render_service_needs():
     blueprint = _read(REPO_ROOT / "render.yaml")
-    worker_block = blueprint[blueprint.index("type: worker"):]
+    lines = blueprint.splitlines()
     secret_keys = {
         line.split("key:", 1)[1].strip()
-        for line, nxt in zip(worker_block.splitlines(), worker_block.splitlines()[1:])
+        for line, nxt in zip(lines, lines[1:])
         if "- key:" in line and "sync: false" in nxt
-    } - {"DATABASE_URL"}
-    assert secret_keys, "could not read the worker's secrets from render.yaml"
+    } - {"DATABASE_URL", "RATELIMIT_STORAGE_URI"}
+    assert secret_keys, "could not read the service's secrets from render.yaml"
     for path in (DEPLOY / "env.example", DEPLOY / "cloud-init.yaml"):
         text = _read(path)
         missing = [k for k in secret_keys if f"{k}=" not in text]

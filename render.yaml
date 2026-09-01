@@ -1,8 +1,8 @@
-databases:
-  - name: machreach-db
-    plan: basic-256mb
-    databaseName: machreach
-    user: machreach
+# One paid service. Production Postgres is on Neon's free tier (its direct
+# connection string goes into DATABASE_URL by hand; docs/NEON_MIGRATION.md),
+# and the background worker runs inside this web service (EMBEDDED_WORKER,
+# see gunicorn.conf.py and worker.py). No `databases:` block and no worker
+# service on purpose: either one back here is a second bill.
 
 services:
   - type: web
@@ -11,6 +11,7 @@ services:
     plan: starter
     autoDeployTrigger: checksPass
     buildCommand: pip install --require-hashes -r requirements.lock
+    # The only place migrations run: there is no second service to race.
     preDeployCommand: python migrate.py
     # One worker on purpose: the in-memory rate limiter counts per process, so
     # a second worker would halve every limit's accuracy until Redis exists.
@@ -30,8 +31,9 @@ services:
     #
     # Safe to fork here because nothing at import time owns a connection or a
     # thread: the Postgres pool is lazy, migrations run in preDeployCommand
-    # rather than at import (test_gunicorn_preload_is_safe pins both), and the
-    # Sentry background worker re-spawns itself in the child on first use.
+    # rather than at import (test_gunicorn_preload_is_safe pins both), the
+    # embedded job scheduler starts in post_fork, and the Sentry background
+    # worker re-spawns itself in the child on first use.
     # It also makes the recycle do its job properly — the fresh worker forks
     # from the arbiter's clean image, so whatever the old one leaked is gone.
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 8 --preload --timeout 120 --max-requests 5000 --max-requests-jitter 500
@@ -43,16 +45,22 @@ services:
         value: "3.13.12"
       - key: PYTHONUNBUFFERED
         value: "1"
+      # Neon direct endpoint with ?sslmode=require. Not the -pooler endpoint:
+      # the app keeps its own pool, and migrate.py's advisory lock needs a
+      # real session (PgBouncer transaction pooling breaks both).
       - key: DATABASE_URL
-        fromDatabase:
-          name: machreach-db
-          property: connectionString
+        sync: false
+      # The background jobs run in this process, on a four-thread scheduler
+      # started after the fork (gunicorn.conf.py). Remove to run them in a
+      # separate `python worker.py` process instead; never both.
+      - key: EMBEDDED_WORKER
+        value: "1"
       - key: SECRET_KEY
         generateValue: true
-      # Sized for 8 gunicorn threads plus the background daemon threads that
-      # also hit the DB; still far under the Postgres plan's connection limit.
+      # 8 request threads + 4 scheduler threads + the background daemon
+      # threads that also hit the DB; still far under Neon's connection limit.
       - key: DB_POOL_MAX
-        value: "12"
+        value: "16"
       - key: ENCRYPTION_KEY
         sync: false
       - key: ADMIN_ACTION_SECRET
@@ -160,70 +168,6 @@ services:
       - key: POSTHOG_KEY
         sync: false
       - key: POSTHOG_HOST
-        sync: false
-      - key: LEADERBOARD_WINNERS_RECIPIENT
-        sync: false
-
-  - type: worker
-    name: machreach-worker
-    runtime: python
-    plan: starter
-    autoDeployTrigger: checksPass
-    buildCommand: pip install --require-hashes -r requirements.lock
-    preDeployCommand: python migrate.py
-    startCommand: python worker.py
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.13.12"
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: machreach-db
-          property: connectionString
-      - key: SECRET_KEY
-        sync: false
-      - key: ENCRYPTION_KEY
-        sync: false
-      - key: ADMIN_ACTION_SECRET
-        sync: false
-      - key: OPERATIONS_SECRET
-        sync: false
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASSWORD
-        sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: AI_PLUS_MONTHLY_LIMIT
-        value: "100"
-      - key: AI_USER_DAILY_MAX
-        value: "120"
-      - key: AI_GLOBAL_DAILY_MAX
-        value: "5000"
-      - key: AI_USER_DAILY_TOKEN_MAX
-        value: "1000000"
-      - key: AI_GLOBAL_DAILY_TOKEN_MAX
-        value: "25000000"
-      - key: AI_ESTIMATED_INPUT_USD_PER_MILLION
-        value: "0.15"
-      - key: AI_ESTIMATED_OUTPUT_USD_PER_MILLION
-        value: "0.60"
-      - key: REFERRAL_REWARD_30D_MAX
-        value: "20"
-      - key: ACADEMIC_UNIVERSITY_CHANGE_COOLDOWN_DAYS
-        value: "30"
-      - key: BASE_URL
-        sync: false
-      - key: LEMON_SQUEEZY_API_KEY
-        sync: false
-      - key: LEMON_SQUEEZY_STORE_ID
-        sync: false
-      - key: SENTRY_DSN
         sync: false
       - key: LEADERBOARD_WINNERS_RECIPIENT
         sync: false

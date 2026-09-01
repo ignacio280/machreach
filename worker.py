@@ -1,10 +1,18 @@
 """MachReach Uni background jobs.
 
-Two ways to run it, same jobs:
+Three ways to run them, same jobs:
+
+``EMBEDDED_WORKER=1`` on the web service (production)
+    gunicorn's post-fork hook (gunicorn.conf.py) calls start_embedded() in
+    the worker process, and the scheduler runs on a small thread pool next
+    to the request threads. One paid instance instead of two, and a queued
+    quiz is still picked up within five seconds. The jobs mostly wait on
+    the database, the AI provider, and SMTP, so they cost the web process
+    little CPU.
 
 ``python worker.py``
-    A long-running scheduler process (local development, or a Procfile-style
-    host). Interval jobs and the time-of-day jobs tick inside one process.
+    A long-running scheduler process of its own (local development, a
+    Procfile-style host, the VPS stack in deploy/).
 
 ``python worker.py --once`` (or ``WORKER_MODE=once``)
     One pass and exit: what the Render cron job runs every minute. Every
@@ -31,12 +39,15 @@ from apscheduler.triggers.cron import CronTrigger
 from machreach_core.config import LEADERBOARD_WINNERS_RECIPIENT, SENTRY_DSN
 if SENTRY_DSN:
     import sentry_sdk
-    sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        environment="worker",
-        release=(os.getenv("RENDER_GIT_COMMIT") or "").strip() or None,
-        send_default_pii=False,
-    )
+    # Not when embedded: the web process initialised Sentry as "production"
+    # already, and a second init here would relabel every web event.
+    if not sentry_sdk.is_initialized():
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment="worker",
+            release=(os.getenv("RENDER_GIT_COMMIT") or "").strip() or None,
+            send_default_pii=False,
+        )
 
 from machreach_core.db import (
     _exec,
@@ -934,6 +945,95 @@ def _once_requested(argv: list[str] | None = None) -> bool:
     return "--once" in argv or (os.getenv("WORKER_MODE") or "").strip().lower() == "once"
 
 
+def register_jobs(scheduler) -> None:
+    """Put every job on a scheduler; shared by the standalone and embedded runtimes.
+
+    The time-of-day jobs go through run_due_daily_jobs and its database
+    slots rather than cron triggers, in every runtime: a process restarted
+    at 00:03 still runs the midnight refresh, and two processes that overlap
+    for a minute during a deploy cannot both send a streak reminder.
+    """
+    scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
+    scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
+    scheduler.add_job(recover_worker_state, "interval", minutes=1, id="recover_worker_state")
+    scheduler.add_job(cancel_retired_product_subscriptions, "interval", minutes=1,
+                      id="retired_billing_cancellations")
+    scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
+                      id="expire_billing_grace_periods")
+    scheduler.add_job(process_leaderboard_payouts, "interval", minutes=5,
+                      id="leaderboard_payouts", max_instances=1, coalesce=True)
+    scheduler.add_job(run_due_daily_jobs, "interval", minutes=1, id="daily_schedule", max_instances=1)
+
+
+def _startup_pass() -> None:
+    """What a freshly started worker does before its first scheduled tick."""
+    for job_id, func in INTERVAL_JOBS:
+        try:
+            func()
+        except Exception as exc:
+            _report_worker_error(job_id.upper(), exc)
+    try:
+        process_async_jobs()
+    except Exception as exc:
+        _report_worker_error("PROCESS_ASYNC_JOBS", exc)
+
+
+EMBEDDED_WORKER_THREADS = 4
+
+
+def embedded_worker_enabled() -> bool:
+    return (os.getenv("EMBEDDED_WORKER") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def start_embedded():
+    """Start the scheduler inside this process and return it.
+
+    Called from gunicorn's post_fork hook, so it must return quickly: the
+    startup pass is queued on the scheduler's own pool rather than run here,
+    and the worker starts answering requests while it runs. Four threads
+    bound how many database connections the jobs can hold at once next to
+    the request threads (DB_POOL_MAX is sized for both).
+    """
+    from apscheduler.executors.pool import ThreadPoolExecutor
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    scheduler = BackgroundScheduler(
+        timezone=SCHEDULER_TIMEZONE,
+        executors={"default": ThreadPoolExecutor(EMBEDDED_WORKER_THREADS)},
+        # A tick that slipped while the process was busy runs late rather
+        # than being skipped, and never more than once.
+        job_defaults={"coalesce": True, "misfire_grace_time": 60},
+    )
+    register_jobs(scheduler)
+    scheduler.add_job(_startup_pass, id="startup_pass")
+    scheduler.start()
+    print(f"[EMBEDDED WORKER] started in pid {os.getpid()}", flush=True)
+    return scheduler
+
+
+def stop_embedded(scheduler, wait_seconds: float = 60.0) -> bool:
+    """Stop the scheduler, giving a job in flight up to ``wait_seconds``.
+
+    gunicorn recycles its worker every few thousand requests; without this a
+    quiz being generated at that moment would sit as "running" until the
+    stale-job recovery an hour later. AI calls are bounded to 40 seconds,
+    so a minute lets the job finish and record its result. Returns True
+    when everything stopped in time.
+    """
+    done = threading.Event()
+
+    def _shutdown():
+        try:
+            scheduler.shutdown(wait=True)
+        finally:
+            done.set()
+
+    threading.Thread(target=_shutdown, name="embedded-worker-shutdown", daemon=True).start()
+    finished = done.wait(wait_seconds)
+    print(f"[EMBEDDED WORKER] stopped ({'clean' if finished else 'job still running'})", flush=True)
+    return finished
+
+
 def main(argv: list[str] | None = None) -> int:
     is_production = bool(os.getenv("RENDER")) or any(
         (os.getenv(name) or "").strip().lower() == "production"
@@ -956,23 +1056,8 @@ def main(argv: list[str] | None = None) -> int:
     print("MachReach Uni worker started.")
 
     scheduler = BlockingScheduler(timezone=SCHEDULER_TIMEZONE)
-    scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
-    scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
-    scheduler.add_job(recover_worker_state, "interval", minutes=1, id="recover_worker_state")
-    scheduler.add_job(cancel_retired_product_subscriptions, "interval", minutes=1,
-                      id="retired_billing_cancellations")
-    scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
-                      id="expire_billing_grace_periods")
-    scheduler.add_job(process_leaderboard_payouts, "interval", minutes=5,
-                      id="leaderboard_payouts", max_instances=1, coalesce=True)
-    for job_id, func, when in DAILY_JOBS:
-        scheduler.add_job(func, "cron", id=job_id, **when)
-    # Run once immediately
-    heartbeat()
-    recover_worker_state()
-    cancel_retired_product_subscriptions()
-    process_leaderboard_payouts()
-    process_async_jobs()
+    register_jobs(scheduler)
+    _startup_pass()
 
     try:
         scheduler.start()

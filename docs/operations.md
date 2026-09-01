@@ -2,29 +2,31 @@
 
 ## Availability and environments
 
-Production runs today on Render (`render.yaml`): the `starter` web service,
-the always-on `machreach-worker`, and the `machreach-db` PostgreSQL database.
-Production deploys only after GitHub checks pass. It is moving to a single
-small server running the stack in `deploy/` (Postgres, web, worker, and Caddy
-for HTTPS), which keeps every behaviour below and cuts the bill to one
-instance; the setup, cutover, and rollback are in
-[VPS_DEPLOY.md](VPS_DEPLOY.md). The Render-plus-Neon-plus-cron alternative is
-documented in [NEON_MIGRATION.md](NEON_MIGRATION.md). A staging stack is not
-currently declared; before a release requires staging, provision it
-separately with its own PostgreSQL database, manual deploys, isolated
-secrets, callback URLs, and Lemon Squeezy test mode.
+Production is the single `starter` web service in the Render Blueprint
+(`render.yaml`), with PostgreSQL on Neon (its direct connection string is set
+by hand as `DATABASE_URL`) and the background worker running inside the web
+service (`EMBEDDED_WORKER=1`, started by `gunicorn.conf.py` after the fork).
+Production deploys only after GitHub checks pass. The move from the previous
+three-resource setup, its verification, and its rollback are in
+[NEON_MIGRATION.md](NEON_MIGRATION.md); a single server of your own is the
+documented alternative in [VPS_DEPLOY.md](VPS_DEPLOY.md). A staging stack is
+not currently declared; before a release requires staging, provision it
+separately with its own PostgreSQL database (a Neon branch or project),
+manual deploys, isolated secrets, callback URLs, and Lemon Squeezy test mode.
 
 `/health` is intentionally public and exposes only `healthy` or `degraded`. `/health/operations` requires `X-Operations-Secret` and reports aggregate worker, queue, webhook, wallet, SMTP, database, and dependency signals without user or job details. The worker heartbeat alerts after `WORKER_HEARTBEAT_STALE_SECONDS` (default 120; raise it only for the cron-job worker variant).
 
-Queued student work (quiz and flashcard generation, verification and password-reset emails) is picked up within five seconds by the always-on worker. `worker.py --once` runs the same jobs as one bounded pass for a cron-style host; its time-of-day jobs keep their America/Santiago schedule in the database, and a missed day collapses into one catch-up run.
+Queued student work (quiz and flashcard generation, verification and password-reset emails) is picked up within five seconds by the embedded worker. Time-of-day jobs keep their America/Santiago schedule in the database in every runtime, so a restart at 00:03 still runs the midnight job and a missed day collapses into one catch-up run. `python worker.py` runs the same jobs as a separate process and `worker.py --once` as one bounded pass; never run either against production while `EMBEDDED_WORKER` is set.
 
 ## Backups and recovery
 
-On Render, database recovery uses the recovery capabilities of the Render
-database plan. On the VPS, `deploy/backup.sh` writes a nightly `pg_dump` to
-`/var/backups/machreach` and keeps fourteen days; copy the newest file off the
-server regularly, since a backup on the database's own disk does not survive
-losing the server. There is no app-managed external S3 backup workflow.
+Database recovery uses Neon's point-in-time restore window, whose length
+depends on the Neon plan (hours on Free, days on paid plans), plus `pg_dump`
+files taken outside Render as described in
+[NEON_MIGRATION.md](NEON_MIGRATION.md#backups-on-neon). While the restore
+window is shorter than a day, a daily `pg_dump` is what meets the RPO. On the
+VPS alternative, `deploy/backup.sh` does that nightly. There is no
+app-managed external S3 backup workflow.
 
 Target recovery objectives for the current product are **RPO 24 hours** and
 **RTO 4 hours**. Exercise a backup against a new, empty, non-production
@@ -39,7 +41,7 @@ Before production deploys:
 
 1. CI must pass for SQLite, PostgreSQL critical paths, Python and Node audits, the landing rebuild, extension validation, and the complete Playwright browser matrix.
 2. Deploy and exercise staging first. Confirm it uses only staging Postgres, provider test credentials, and staging callback URLs.
-3. Deploy with the same `ENCRYPTION_KEY` shared by each environment's web and worker processes. Never share database or provider secrets across environments.
+3. Deploy with one `ENCRYPTION_KEY` per environment; the embedded worker shares the web service's. Never share database or provider secrets across environments.
 4. Confirm public `/health` is healthy, protected `/health/operations` has no failed signals, and the worker heartbeat is newer than two minutes.
 5. In Lemon Squeezy, copy the production store ID plus the product and variant IDs for Plus and every enabled coin pack into the matching `LEMON_SQUEEZY_STORE_ID`, `LS_PRODUCT_*`, and `LS_VARIANT_*` Render variables. A signed event must match all three identifiers; checkout remains disabled when any required identifier is missing.
 6. Exercise staging login, queued AI work, test checkout/webhook, account export, and provider-first deletion before approving production.
@@ -49,7 +51,7 @@ Database migrations must remain backward-compatible for at least one release.
 ## Incident response
 
 1. Assign an incident lead and record the start time, affected feature, and first known bad deploy or event.
-2. Stop unsafe side effects first: stop the worker for duplicate email or reward risk, disable checkout for billing drift, or block the affected route.
+2. Stop unsafe side effects first: set `EMBEDDED_WORKER=0` and redeploy to stop the worker for duplicate email or reward risk, disable checkout for billing drift, or block the affected route.
 3. Preserve Sentry events, worker logs, webhook ledger rows, async-job state, and relevant snapshots. Never copy secrets or recipient content into the incident record.
 4. Restore the previous successful deploy when its code is schema-compatible; otherwise deploy a forward fix.
 5. Reconcile provider state for subscriptions and coin orders, and quarantine uncertain email delivery for manual review.

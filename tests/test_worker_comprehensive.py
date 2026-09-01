@@ -688,7 +688,7 @@ def test_worker_entrypoint_registers_recoverable_schedule(monkeypatch):
         "worker_heartbeat",
         "recover_worker_state",
         "leaderboard_payouts",
-        "streak_risk_push",
+        "daily_schedule",
     } <= job_ids
 
 

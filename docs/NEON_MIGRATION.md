@@ -1,18 +1,17 @@
-# Alternative: stay on Render, Postgres on Neon, worker as a cron job
+# Production on one Render service: Postgres on Neon, worker embedded
 
-The chosen way off the three-resource Render bill is the single server in
-[VPS_DEPLOY.md](VPS_DEPLOY.md). This document is the other option, kept
-because the code supports it: keep the Render web service, move Postgres to
-Neon, and run the worker as a per-second-billed Render cron job. It costs
-about twice the VPS and adds job latency, but it needs no server of your own.
+This is the chosen setup and the runbook for getting there. The Render bill
+had three paid resources: the web service, an always-on worker, and a
+Postgres database. This keeps only the web service. The database moves to
+Neon's free tier, and the background worker runs inside the web service as a
+scheduler thread pool (`EMBEDDED_WORKER=1`, started by `gunicorn.conf.py`
+after the fork). `render.yaml` on this branch already describes that shape;
+merging it is the last step of the cutover, not the first.
 
-`render.yaml` still describes the current always-on worker and Render
-database; applying this path means editing it as shown in *Blueprint
-changes* below.
-
-Nothing here is reversible in one click. Read it once end to end before the
-cutover window, and keep the Render database until the rollback window below
-has passed.
+Nothing changes for a student: same code, same five-second job pickup, same
+dashboard for you. Two alternatives stay documented in case this one ever
+stops fitting: the worker as a per-minute Render cron job (*Appendix* at the
+end) and a single server of your own ([VPS_DEPLOY.md](VPS_DEPLOY.md)).
 
 ## What changes for the product
 
@@ -20,24 +19,25 @@ has passed.
   The app keeps its own connection pool and `migrate.py` takes an advisory
   lock, and neither works through Neon's `-pooler` endpoint (PgBouncer in
   transaction mode). Neon suspends an idle compute after five minutes and
-  drops every connection when it does; `machreach_core.db` now pings a pooled
+  drops every connection when it does; `machreach_core.db` pings a pooled
   connection that sat idle for more than `DB_IDLE_PING_SECONDS` (30) before
   handing it to a request, so a student never sees the dropped socket.
-- **Worker**: the same `worker.py`, run as `python worker.py --once` by a
-  Render cron job every minute instead of an always-on instance. Each run
-  executes every interval job once, fires any time-of-day job whose scheduled
-  time (America/Santiago) has passed since the run recorded in the database,
-  then drains queued student jobs for up to `WORKER_RUN_MAX_SECONDS` (50).
-- **Latency a student can notice**: a queued quiz, flashcard deck, or
-  verification email used to be picked up within five seconds. It now waits
-  for the next run: up to a minute, plus the cron job's start-up. This is the
-  one product-visible trade-off of the cheaper worker. If it matters more
-  than the saving, the old always-on `type: worker` block is in git history.
-- **Alerting**: `/health/operations` alerts when the heartbeat is older than
-  `WORKER_HEARTBEAT_STALE_SECONDS`; set it to 180 on the web service (a
-  scheduled run can start late; the default two minutes assumes a beat every
-  minute). A run
-  beats once at start and every 30 seconds while it is busy.
+- **Worker**: the same `worker.py` jobs on an APScheduler background
+  scheduler with four threads inside the gunicorn worker process. It starts
+  in gunicorn's `post_fork` hook (never at import, so `--preload` stays
+  safe) and stops in `worker_exit`, giving a job in flight up to a minute
+  so a `--max-requests` recycle does not strand a quiz as "running". The
+  time-of-day jobs (plan refresh, streak reminders, cleanups) use the
+  database-backed schedule in every runtime, so a restart at 00:03 still
+  runs the midnight job and two overlapping processes cannot both send a
+  reminder.
+- **Capacity**: the jobs mostly wait on the database, the AI provider, and
+  SMTP, so they take little of the web instance's half CPU. `DB_POOL_MAX`
+  goes to 16 for the 8 request threads plus the 4 scheduler threads.
+- **Never two workers**: `EMBEDDED_WORKER=1` and a separate `python
+  worker.py` process against the same database would each claim jobs
+  (safely) but double the load. The blueprint has no worker service; do
+  not add one back while the flag is set.
 
 ## What could not be verified from this branch
 
@@ -53,14 +53,10 @@ written, so confirm these in the dashboards before the cutover:
    accordingly; the total is still well under the old bill either way.
 2. **Neon Free plan restore window.** Point-in-time restore on Free covers
    hours, not the days the old Render plan kept. See *Backups* below.
-3. **Render cron schedule.** The blueprint snippet below uses `* * * * *`
-   (every minute, UTC). If Render rejects it, use the smallest interval it accepts and raise
-   `WORKER_HEARTBEAT_STALE_SECONDS` to three times that interval.
-4. **Blueprint sync behaviour for the removed database and the changed worker
-   type.** Read the sync preview before confirming it. Expect the database to
-   be flagged as no longer managed (delete it by hand later), and the worker
-   to be recreated as a new cron job, which will ask for its `sync: false`
-   values.
+3. **Blueprint sync behaviour for the removed database and worker.** Read
+   the sync preview before confirming it. Expect both to be flagged as no
+   longer managed by the Blueprint rather than deleted; delete them by hand
+   after the rollback window.
 
 ## Prerequisites
 
@@ -123,76 +119,33 @@ this size takes a minute or two.
 
    Keep `cutover.dump`: it is the last full copy of the Render database and
    the rollback's starting point.
-3. In Render, set `DATABASE_URL` on the web service to the Neon direct URL and
-   add `WORKER_HEARTBEAT_STALE_SECONDS=180`. **Resume** the web service. The
-   deploy runs `migrate.py` against Neon (idempotent, already applied by the
-   script) and then serves.
-4. Verify before touching the worker:
+3. Merge this branch into `master`. Render's Blueprint sync shows the
+   removed `machreach-db` database and `machreach-worker` service and asks
+   for the web service's new `DATABASE_URL`: paste the Neon direct URL.
+   Confirm. The web service redeploys with `EMBEDDED_WORKER=1`: `migrate.py`
+   runs against Neon in the pre-deploy step (idempotent, already applied by
+   the script), then gunicorn starts and each worker process starts the job
+   scheduler. **Resume** the web service if the sync did not.
+4. Verify:
    - `https://machreach.com/health` returns 200 `healthy`.
+   - `GET /health/operations` (with the secret) shows `worker_heartbeat: ok`
+     within two minutes and no failed signals.
+   - The service log shows `[EMBEDDED WORKER] started in pid ...`.
    - `POST /api/admin/check-db` (admin, debug-gated) reports `using_pg: true`
      and a `db_url_prefix` on `neon.tech`.
-   - Log in as a test student; open the dashboard and one course.
-5. Bring up the cron worker. Until the Blueprint sync below has created it,
-   the fastest path is the existing worker service with its `DATABASE_URL`
-   switched to Neon and resumed: it runs the same code and keeps the queue
-   moving. Once the cron job exists, delete the old worker service.
-6. Within three minutes, `GET /health/operations` (with the secret) must show
-   `worker_heartbeat: ok` and no failed signals. `/admin/jobs` shows the last
-   heartbeat and the four `worker_schedule` rows seeded by the first run.
-
-## Blueprint changes
-
-Edit `render.yaml`: delete the `databases:` block, change both services'
-`DATABASE_URL` to `sync: false`, add `WORKER_HEARTBEAT_STALE_SECONDS: "180"`
-to the web service, and replace the `type: worker` service with:
-
-```yaml
-  - type: cron
-    name: machreach-worker
-    runtime: python
-    plan: starter
-    schedule: "* * * * *"          # UTC; jobs keep Santiago times internally
-    autoDeployTrigger: checksPass
-    buildCommand: pip install --require-hashes -r requirements.lock
-    startCommand: python worker.py --once
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.13.12"
-      - key: PYTHONUNBUFFERED
-        value: "1"
-      - key: DATABASE_URL
-        sync: false
-      - key: WORKER_RUN_MAX_SECONDS
-        value: "50"
-      - key: DB_POOL_MAX
-        value: "4"
-      # ... plus the same secret keys the worker service had, all sync: false
-```
-
-Cron jobs have no `preDeployCommand`; migrations run in the web service's
-pre-deploy step, and a run that starts on a stale schema fails
-`check_schema_readiness()` and retries a minute later.
-
-Merge that edit after the cutover verified. Render's Blueprint sync will
-show the removed `machreach-db` database and the `machreach-worker` service
-changing from a worker to a cron job. Confirm the preview matches that and
-nothing else.
-When it asks for the cron job's `sync: false` values, paste the same
-`DATABASE_URL`, `SECRET_KEY`, `ENCRYPTION_KEY`, `ADMIN_ACTION_SECRET`,
-`OPERATIONS_SECRET`, SMTP, OpenAI, Lemon Squeezy, Sentry, and
-`LEADERBOARD_WINNERS_RECIPIENT` values the worker service had (the
-`ENCRYPTION_KEY` must be identical to the web service's).
-
-Watch the first few cron runs in the job's log: each ends with a
-`[WORKER RUN] {...}` line. An idle run finishes in a few seconds.
+   - Log in as a test student, open a course, ask for a quiz: it starts
+     within seconds.
+5. The old worker service stays suspended. Delete it and the Render database
+   after the rollback window below.
 
 ## Rollback
 
 For seven days after the cutover the Render database still exists and still
 holds everything up to the moment the web service was suspended.
 
-- **Within minutes of resuming, before real writes**: set `DATABASE_URL` back
-  to the Render internal URL on both services and redeploy. Nothing is lost.
+- **Within minutes of resuming, before real writes**: revert the merge,
+  resync the Blueprint so `DATABASE_URL` comes from the Render database
+  again, and resume the worker service. Nothing is lost.
 - **After students have written to Neon**: rolling back loses those writes
   unless they are copied back. Run the same script in the other direction
   (`--source "$NEON_DIRECT_URL" --target "$RENDER_EXTERNAL_URL" --force`
@@ -219,13 +172,50 @@ after the first drill on Neon.
 
 ## Day-to-day differences
 
-- **Migrations** run only in the web service's `preDeployCommand`. A cron run
-  that starts on a stale schema fails `check_schema_readiness()` and retries
-  a minute later; that is one red run in the log during a deploy, not an
-  incident.
+- **Migrations** run only in the web service's `preDeployCommand`, before
+  the new code and its embedded worker start.
 - **Shell scripts** (`scripts/grant_admin.py`, `diagnose_account.py`,
   `unstick_db.py`, ...) still run from the web service's shell; it has the
   Neon `DATABASE_URL`.
 - **Neon usage**: watch storage against the plan's limit and compute hours
   on the Neon billing page for the first month; the compute stays awake
   around the clock because of health checks and the per-minute cron.
+
+## Appendix: the worker as a Render cron job instead
+
+If the embedded worker ever has to leave the web process (for example the
+instance runs out of memory during a large plan refresh), the same jobs run
+as a per-minute Render cron job billed per second: `python worker.py
+--once` executes every interval job once, fires any due time-of-day job, and
+drains the queue for up to `WORKER_RUN_MAX_SECONDS` (50). It costs about a
+dollar a month more and a queued quiz waits up to a minute for the next run
+instead of five seconds. Remove `EMBEDDED_WORKER` from the web service, set
+`WORKER_HEARTBEAT_STALE_SECONDS=180` there (a scheduled run can start
+late), and add:
+
+```yaml
+  - type: cron
+    name: machreach-worker
+    runtime: python
+    plan: starter
+    schedule: "* * * * *"          # UTC; jobs keep Santiago times internally
+    autoDeployTrigger: checksPass
+    buildCommand: pip install --require-hashes -r requirements.lock
+    startCommand: python worker.py --once
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.12"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: DATABASE_URL
+        sync: false
+      - key: WORKER_RUN_MAX_SECONDS
+        value: "50"
+      - key: DB_POOL_MAX
+        value: "4"
+      # ... plus the same secret keys the web service has, all sync: false
+```
+
+Cron jobs have no `preDeployCommand`; migrations run in the web service's
+pre-deploy step, and a run that starts on a stale schema fails
+`check_schema_readiness()` and retries a minute later.
