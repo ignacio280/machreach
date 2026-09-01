@@ -6,10 +6,14 @@ Same code, same gunicorn command, same five-second job pickup as Render, on
 roughly a quarter of the bill. Everything in `deploy/` is automated; the
 steps a person must take are listed under *Your part*.
 
-Recommended server: Hetzner Cloud CPX11 in Ashburn (2 vCPU, 2 GB RAM, 40 GB
-disk, about 5 USD a month including the IPv4 address) on Ubuntu 24.04.
-Ashburn is the closest Hetzner location to Chile. Any other provider works
-as long as the image is Ubuntu 24.04 and it accepts cloud-init user data.
+Recommended server: DigitalOcean's Basic Droplet at 6 USD a month (1 vCPU,
+1 GB RAM, 25 GB disk) in the New York region, Ubuntu 24.04. New York is the
+closest DigitalOcean region to Chile, and DigitalOcean accepts PayPal as
+well as cards. The bootstrap adds 2 GB of swap, which is what makes 1 GB of
+memory enough for this stack; the 12 USD size with 2 GB is the comfortable
+upgrade if the site grows. Hetzner's CPX11 (about 5 USD) is equivalent when
+its payment check accepts your card. Any provider works as long as the
+image is Ubuntu 24.04 and it accepts cloud-init user data.
 
 ## What the stack does
 
@@ -34,13 +38,15 @@ as long as the image is Ubuntu 24.04 and it accepts cloud-init user data.
 
 ## Your part
 
-1. **Create the server.** Hetzner Cloud, new project, *Add server*: Ashburn,
-   Ubuntu 24.04, CPX11, add your SSH key. Open `deploy/cloud-init.yaml` from
-   this repository, fill in the values in its `content:` block (copy each
-   secret from the Render web service's environment page; `POSTGRES_PASSWORD`
-   is any new long random string; `RENDER_DATABASE_URL` is the database's
-   **external** connection string from its Render page), and paste the whole
-   file into the *Cloud config* box. Create the server and note its IP.
+1. **Create the server.** DigitalOcean, *Create Droplet*: New York, Ubuntu
+   24.04, Basic, Regular, 6 USD, add your SSH key. Open `deploy/cloud-init.yaml`
+   from this repository, fill in the values in its `content:` block (copy
+   each secret from the Render web service's environment page;
+   `POSTGRES_PASSWORD` is any new long random string; `RENDER_DATABASE_URL`
+   is the database's **external** connection string from its Render page),
+   then under *Advanced Options* tick *Add Initialization scripts (free)* and
+   paste the whole file there. (On Hetzner the same box is called *Cloud
+   config*.) Create the server and note its IP.
 2. **Wait about five minutes**, then open `http://<ip>:8080/health` in a
    browser. `{"status":"healthy"}` means the stack is up and holds a copy of
    the production data as of a few minutes ago. `ssh root@<ip> tail
@@ -76,8 +82,8 @@ after the cutover stay on the server; `deploy/backup.sh` output or a
 - **Follow master** after this branch is merged: `cd /opt/machreach && git
   checkout master && machreach-deploy --force`.
 - **Backups**: `machreach-backup` writes one now. Copy the newest file off the
-  server now and then; Hetzner's server snapshots (about 20% of the server
-  price) are the one-click alternative.
+  server now and then; the provider's server backups (DigitalOcean charges
+  20% of the server price, Hetzner similar) are the one-click alternative.
 - **Health**: the `uptime.yml` GitHub workflow keeps probing
   `https://machreach.com/health` and `/health/operations`; its
   `UPTIME_ORIGIN_HEALTH_URL` default still points at Render's

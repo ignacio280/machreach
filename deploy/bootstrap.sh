@@ -13,6 +13,17 @@ log() { echo "[bootstrap] $*"; }
 chmod 600 deploy/.env
 chmod +x deploy/*.sh
 
+# Swap: the cheapest servers have 1 GB of memory, and Postgres, the app, the
+# worker, and Caddy together sit close to that. Two gigabytes of swap turn a
+# tight moment into a slow one instead of an out-of-memory kill.
+if [[ ! -f /swapfile ]]; then
+    fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile >/dev/null
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    sysctl -q vm.swappiness=10
+    echo 'vm.swappiness=10' > /etc/sysctl.d/90-machreach.conf
+fi
+
 # Firewall: SSH, HTTP, HTTPS, and the pre-cutover check port.
 if command -v ufw >/dev/null; then
     ufw allow 22/tcp >/dev/null
