@@ -1,6 +1,7 @@
 """
 Core MachReach Uni persistence and cross-engine database helpers.
-Uses DATABASE_URL env var (Render Postgres format).
+Uses the DATABASE_URL env var (a libpq connection string; production is a
+Neon Postgres direct endpoint, see docs/NEON_MIGRATION.md).
 Falls back to SQLite via DATABASE_PATH when DATABASE_URL is empty (local dev).
 """
 from __future__ import annotations
@@ -25,6 +26,7 @@ _USE_PG = bool(DATABASE_URL)
 if _USE_PG:
     import os
     import threading
+    import time
     import psycopg2
     import psycopg2.extras
     import psycopg2.errors
@@ -66,6 +68,50 @@ if _USE_PG:
                         options="-c idle_in_transaction_session_timeout=120000",
                     )
         return _POOL
+
+    # When each pooled connection was last handed back, by id(conn). Neon
+    # suspends an idle compute after five minutes and closes every connection
+    # it held; TCP keepalives notice eventually, but the pool would still hand
+    # the dead socket to the next request, which fails with "SSL connection
+    # has been closed unexpectedly" instead of a page. So a connection that
+    # sat unused longer than DB_IDLE_PING_SECONDS is pinged before it is used,
+    # and replaced if the server is gone. Fresh and recently used connections
+    # skip the ping: the common case costs nothing.
+    _LAST_RETURNED: dict = {}
+    _IDLE_PING_SECONDS = float(os.getenv("DB_IDLE_PING_SECONDS", "30"))
+
+    def _connection_is_live(conn) -> bool:
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1")
+            cur.close()
+            conn.rollback()
+            return True
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            return False
+
+    def _checkout(pool):
+        """Take a pooled connection the server has not closed behind our back."""
+        conn = pool.getconn()
+        for _ in range(3):
+            returned_at = _LAST_RETURNED.get(id(conn))
+            if not getattr(conn, "closed", 0) and (
+                returned_at is None
+                or time.monotonic() - returned_at < _IDLE_PING_SECONDS
+                or _connection_is_live(conn)
+            ):
+                return conn
+            _LAST_RETURNED.pop(id(conn), None)
+            pool.putconn(conn, close=True)
+            conn = pool.getconn()
+        return conn
+
+    def _checkin(pool, conn, broken: bool) -> None:
+        if broken:
+            _LAST_RETURNED.pop(id(conn), None)
+        else:
+            _LAST_RETURNED[id(conn)] = time.monotonic()
+        pool.putconn(conn, close=broken)
 else:
     import sqlite3
     from machreach_core.config import DATABASE_PATH
@@ -118,11 +164,7 @@ def _db_fingerprint() -> str:
 def get_db():
     if _USE_PG:
         pool = _get_pool()
-        conn = pool.getconn()
-        # Discard a connection the server already closed under us.
-        if getattr(conn, "closed", 0):
-            pool.putconn(conn, close=True)
-            conn = pool.getconn()
+        conn = _checkout(pool)
         broken = False
         try:
             yield conn
@@ -140,8 +182,9 @@ def get_db():
             raise
         finally:
             try:
-                pool.putconn(conn, close=broken)
+                _checkin(pool, conn, broken)
             except Exception:
+                _LAST_RETURNED.pop(id(conn), None)
                 try:
                     conn.close()
                 except Exception:

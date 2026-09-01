@@ -397,7 +397,7 @@ def debug_smtp_send_test():
 
 
 # ---------------------------------------------------------------------------
-# ONE-TIME: Diagnostic — check what DB Render is using
+# ONE-TIME: Diagnostic — check which database this instance is using
 # ---------------------------------------------------------------------------
 
 @app.route("/api/admin/check-db", methods=["POST"])
@@ -3568,7 +3568,7 @@ def admin_jobs():
       <div class="admin-grid">{cards}</div>
       <div class="admin-panel">
         <h2>Worker heartbeat</h2>
-        <div class="admin-note">Last heartbeat: <b>{_esc(worker_updated or 'never')}</b>. If this stops updating after deploy, check the Render <code>machreach-worker</code> service logs/env vars.</div>
+        <div class="admin-note">Last heartbeat: <b>{_esc(worker_updated or 'never')}</b>. It is refreshed by each run of the Render <code>machreach-worker</code> cron job (every minute); if it stops updating after a deploy, check that job's run logs and env vars.</div>
       </div>
       <div class="admin-panel"><h2>Active jobs</h2>{_jobs_table(active_jobs, "No active queued or running jobs.")}</div>
       <div class="admin-panel"><h2>Failed quiz generations</h2>{_jobs_table(failed_quiz, "No failed quiz generations.")}</div>

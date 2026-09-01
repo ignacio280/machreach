@@ -1,9 +1,30 @@
-"""MachReach Uni background jobs. Run separately with ``python worker.py``."""
+"""MachReach Uni background jobs.
+
+Two ways to run it, same jobs:
+
+``python worker.py``
+    A long-running scheduler process (local development, or a Procfile-style
+    host). Interval jobs and the time-of-day jobs tick inside one process.
+
+``python worker.py --once`` (or ``WORKER_MODE=once``)
+    One pass and exit: what the Render cron job runs every minute. Every
+    interval job runs once, each time-of-day job runs if its scheduled time
+    has passed since the run recorded in the database, and the queue of
+    student jobs is drained for a bounded number of seconds. Billing is per
+    second of runtime, so an idle run costs a few seconds of a starter
+    instance instead of a whole month of one.
+"""
 from __future__ import annotations
 
+from datetime import datetime, timezone
+import json
 import os
+import sys
+import threading
+import time
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 
 # ── Sentry error tracking (production only) ──
@@ -18,13 +39,19 @@ if SENTRY_DSN:
     )
 
 from machreach_core.db import (
+    _exec,
+    _fetchone,
+    _now_expr,
     check_schema_readiness,
     claim_async_jobs,
     fail_async_job,
+    get_db,
     init_db,
     record_worker_heartbeat,
     set_async_job_status,
 )
+
+SCHEDULER_TIMEZONE = "America/Santiago"
 
 
 
@@ -359,8 +386,12 @@ def _process_student_flashcard_job(job: dict):
 
 
 
-def process_async_jobs():
-    """Claim and run queued one-off jobs from the database."""
+def process_async_jobs() -> int:
+    """Claim and run queued one-off jobs from the database.
+
+    Returns how many jobs were claimed, so a cron run knows whether the queue
+    is empty or worth another pass.
+    """
     record_worker_heartbeat()
     processed = 0
     for job in claim_async_jobs("student_quiz_generation", limit=2, progress="Generating your quiz..."):
@@ -381,6 +412,7 @@ def process_async_jobs():
         process_reset_job(job, _send_system_email)
     if processed:
         print(f"[ASYNC JOBS] Processed {processed} job(s).")
+    return processed
 
 
 def heartbeat():
@@ -715,6 +747,193 @@ def send_monthly_leaderboard_email(year: int | None = None, month: int | None = 
         _report_worker_error("MONTHLY_WINNERS", e)
 
 
+# ── Schedule ─────────────────────────────────────────────────────────────
+# Time-of-day jobs, in the scheduler timezone. One table serves both runtimes:
+# the long-running scheduler registers each as a cron trigger, and a cron-job
+# run fires whichever scheduled time has passed since the last run it recorded.
+DAILY_JOBS = (
+    ("refresh_student_plans", refresh_student_plans, {"hour": 0, "minute": 0}),
+    ("streak_risk_push", send_streak_risk_pushes, {"hour": 20, "minute": 0}),
+    ("clean_abandoned_unverified_accounts", clean_abandoned_unverified_accounts,
+     {"hour": 3, "minute": 30}),
+    ("purge_deleted_courses", purge_deleted_courses, {"hour": 3, "minute": 45}),
+)
+
+# Jobs the scheduler ran every minute to every hour. A cron run executes each
+# of them once, in this order: they are idempotent and cheap, so running the
+# hourly one every minute costs a query, while skipping any of them for a
+# minute is what used to page someone.
+INTERVAL_JOBS = (
+    ("worker_heartbeat", heartbeat),
+    ("recover_worker_state", recover_worker_state),
+    ("retired_billing_cancellations", cancel_retired_product_subscriptions),
+    ("expire_billing_grace_periods", expire_billing_grace_periods),
+    ("leaderboard_payouts", process_leaderboard_payouts),
+)
+
+# Schedule state lives in async_jobs beside the heartbeat, so no migration:
+# one row per time-of-day job, whose payload holds the last scheduled time
+# that was fired (as the schedule time, not the wall clock, so catch-up after
+# an outage is exact).
+_SCHEDULE_JOB_TYPE = "worker_schedule"
+
+
+def _schedule_payload(fired_at: datetime) -> str:
+    return json.dumps({"fired_at": fired_at.isoformat()}, separators=(",", ":"))
+
+
+def _last_fired(job_id: str) -> tuple[datetime | None, str | None]:
+    """Return (last scheduled time fired, raw payload) for a time-of-day job."""
+    with get_db() as db:
+        row = _fetchone(
+            db,
+            "SELECT payload_json FROM async_jobs WHERE job_type = %s AND job_key = %s",
+            (_SCHEDULE_JOB_TYPE, job_id),
+        )
+    if not row:
+        return None, None
+    raw = row.get("payload_json")
+    try:
+        fired_at = datetime.fromisoformat(json.loads(raw or "{}").get("fired_at", ""))
+    except (TypeError, ValueError, AttributeError):
+        return None, raw
+    if fired_at.tzinfo is None:
+        fired_at = fired_at.replace(tzinfo=timezone.utc)
+    return fired_at, raw
+
+
+def _claim_schedule_slot(job_id: str, fired_at: datetime, expected_payload: str | None) -> bool:
+    """Record ``fired_at`` for a job, only if nobody else has since we looked.
+
+    Two overlapping runs both see the same last-fired time; the conditional
+    write lets exactly one of them own the slot, which is what keeps a streak
+    reminder from going out twice.
+    """
+    now = _now_expr()
+    payload = _schedule_payload(fired_at)
+    with get_db() as db:
+        if expected_payload is None:
+            cur = _exec(db, f"""
+                INSERT INTO async_jobs
+                    (job_type, job_key, status, progress, input_json, payload_json,
+                     error, attempts, max_attempts, updated_at)
+                VALUES (%s, %s, 'done', 'Scheduled job', '{{}}', %s, '', 0, 1, {now})
+                ON CONFLICT (job_type, job_key) DO NOTHING
+            """, (_SCHEDULE_JOB_TYPE, job_id, payload))
+        else:
+            cur = _exec(db, f"""
+                UPDATE async_jobs
+                SET payload_json = %s, status = 'done', error = '', updated_at = {now}
+                WHERE job_type = %s AND job_key = %s AND payload_json = %s
+            """, (payload, _SCHEDULE_JOB_TYPE, job_id, expected_payload))
+        return bool(cur.rowcount)
+
+
+def _latest_due(trigger: CronTrigger, last: datetime, now: datetime) -> datetime | None:
+    """The most recent scheduled time after ``last`` that is not in the future.
+
+    Missed days collapse into one run: after an outage a student gets one
+    plan refresh and one streak reminder, not one per missed day.
+    """
+    due = None
+    candidate = trigger.get_next_fire_time(last, now)
+    while candidate is not None and candidate <= now:
+        due = candidate
+        candidate = trigger.get_next_fire_time(candidate, now)
+    return due
+
+
+def run_due_daily_jobs(now: datetime | None = None) -> list[str]:
+    """Fire every time-of-day job whose scheduled time has passed since it last ran.
+
+    The first run only seeds each job's state with the current time, so
+    switching to cron mode never replays a day's jobs. That matches the
+    scheduler, which also fires nothing until the next scheduled time.
+    """
+    now = now or datetime.now(timezone.utc)
+    fired: list[str] = []
+    for job_id, func, when in DAILY_JOBS:
+        try:
+            last, raw = _last_fired(job_id)
+            if last is None:
+                _claim_schedule_slot(job_id, now, raw)
+                continue
+            due = _latest_due(CronTrigger(timezone=SCHEDULER_TIMEZONE, **when), last, now)
+            if due is None or not _claim_schedule_slot(job_id, due, raw):
+                continue
+        except Exception as exc:
+            _report_worker_error(f"SCHEDULE_{job_id.upper()}", exc)
+            continue
+        print(f"[SCHEDULE] {job_id} due at {due.isoformat()}", flush=True)
+        try:
+            func()
+        except Exception as exc:
+            _report_worker_error(job_id.upper(), exc)
+        fired.append(job_id)
+    return fired
+
+
+def _keep_heartbeat_fresh(stop: threading.Event, every: float = 30.0) -> None:
+    """Beat while a run is busy, so a long AI job does not read as a dead worker."""
+    while not stop.wait(every):
+        try:
+            record_worker_heartbeat()
+        except Exception as exc:
+            _report_worker_error("WORKER_HEARTBEAT", exc)
+
+
+def run_once(max_seconds: float | None = None, now: datetime | None = None) -> dict:
+    """One cron-job run. Returns counts for the log line and for tests.
+
+    ``max_seconds`` bounds the queue drain, not a job in flight: a claimed
+    quiz still finishes. It defaults to WORKER_RUN_MAX_SECONDS (50), just
+    under the one-minute schedule, so a busy queue is worked continuously
+    and an idle one costs a few seconds.
+    """
+    if max_seconds is None:
+        max_seconds = float(os.getenv("WORKER_RUN_MAX_SECONDS", "50"))
+    started = time.monotonic()
+    stop = threading.Event()
+    beat = threading.Thread(
+        target=_keep_heartbeat_fresh, args=(stop,), name="worker-heartbeat", daemon=True
+    )
+    beat.start()
+    processed = passes = 0
+    fired: list[str] = []
+    try:
+        for job_id, func in INTERVAL_JOBS:
+            try:
+                func()
+            except Exception as exc:
+                _report_worker_error(job_id.upper(), exc)
+        fired = run_due_daily_jobs(now)
+        while True:
+            passes += 1
+            try:
+                claimed = int(process_async_jobs() or 0)
+            except Exception as exc:
+                _report_worker_error("PROCESS_ASYNC_JOBS", exc)
+                break
+            processed += claimed
+            if not claimed or time.monotonic() - started >= max_seconds:
+                break
+    finally:
+        stop.set()
+    summary = {
+        "processed": processed,
+        "passes": passes,
+        "fired": fired,
+        "seconds": round(time.monotonic() - started, 1),
+    }
+    print(f"[WORKER RUN] {json.dumps(summary, separators=(',', ':'))}", flush=True)
+    return summary
+
+
+def _once_requested(argv: list[str] | None = None) -> bool:
+    argv = sys.argv[1:] if argv is None else argv
+    return "--once" in argv or (os.getenv("WORKER_MODE") or "").strip().lower() == "once"
+
+
 if __name__ == "__main__":
     is_production = bool(os.getenv("RENDER")) or any(
         (os.getenv(name) or "").strip().lower() == "production"
@@ -730,24 +949,24 @@ if __name__ == "__main__":
             raise
     check_schema_readiness()
 
+    if _once_requested():
+        run_once()
+        sys.exit(0)
+
     print("MachReach Uni worker started.")
 
-    scheduler = BlockingScheduler(timezone="America/Santiago")
+    scheduler = BlockingScheduler(timezone=SCHEDULER_TIMEZONE)
     scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
     scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
     scheduler.add_job(recover_worker_state, "interval", minutes=1, id="recover_worker_state")
     scheduler.add_job(cancel_retired_product_subscriptions, "interval", minutes=1,
                       id="retired_billing_cancellations")
-    scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
-    scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
-    scheduler.add_job(clean_abandoned_unverified_accounts, "cron", hour=3, minute=30,
-                      id="clean_abandoned_unverified_accounts")
     scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
                       id="expire_billing_grace_periods")
     scheduler.add_job(process_leaderboard_payouts, "interval", minutes=5,
                       id="leaderboard_payouts", max_instances=1, coalesce=True)
-    scheduler.add_job(purge_deleted_courses, "cron", hour=3, minute=45,
-                      id="purge_deleted_courses")
+    for job_id, func, when in DAILY_JOBS:
+        scheduler.add_job(func, "cron", id=job_id, **when)
     # Run once immediately
     heartbeat()
     recover_worker_state()

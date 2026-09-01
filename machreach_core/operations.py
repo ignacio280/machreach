@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import timedelta
 import os
 
+from machreach_core.config import WORKER_HEARTBEAT_STALE_SECONDS
 from machreach_core.db import (
     _USE_PG,
     _async_job_is_stale,
@@ -94,7 +95,9 @@ def collect_operational_health() -> dict:
             "WHERE job_type = %s ORDER BY updated_at DESC LIMIT 1",
             ("worker_heartbeat",),
         )
-        worker_stale = not heartbeat or _async_job_is_stale(heartbeat.get("updated_at"), 120)
+        worker_stale = not heartbeat or _async_job_is_stale(
+            heartbeat.get("updated_at"), WORKER_HEARTBEAT_STALE_SECONDS
+        )
 
         stale_boundary = (
             "updated_at < NOW() - INTERVAL '10 minutes'"

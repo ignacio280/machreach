@@ -1,8 +1,7 @@
-databases:
-  - name: machreach-db
-    plan: basic-256mb
-    databaseName: machreach
-    user: machreach
+# No `databases:` block on purpose. Production Postgres is hosted on Neon
+# (docs/NEON_MIGRATION.md); DATABASE_URL below is the Neon *direct* connection
+# string, set by hand in the dashboard on both services. Do not add a Render
+# database back here: a Blueprint sync would provision and bill it.
 
 services:
   - type: web
@@ -11,6 +10,8 @@ services:
     plan: starter
     autoDeployTrigger: checksPass
     buildCommand: pip install --require-hashes -r requirements.lock
+    # The only place migrations run in production: cron jobs have no
+    # pre-deploy step, so the worker no longer races this one.
     preDeployCommand: python migrate.py
     # One worker on purpose: the in-memory rate limiter counts per process, so
     # a second worker would halve every limit's accuracy until Redis exists.
@@ -43,10 +44,16 @@ services:
         value: "3.13.12"
       - key: PYTHONUNBUFFERED
         value: "1"
+      # Neon direct endpoint with ?sslmode=require. Not the -pooler endpoint:
+      # the app keeps its own pool, and migrate.py's advisory lock needs a
+      # real session (PgBouncer transaction pooling breaks both).
       - key: DATABASE_URL
-        fromDatabase:
-          name: machreach-db
-          property: connectionString
+        sync: false
+      # The worker is a cron job that beats once per run (every minute) and
+      # every 30s while busy. Runs can start late, so alert at three minutes,
+      # not the two that fit the always-on worker.
+      - key: WORKER_HEARTBEAT_STALE_SECONDS
+        value: "180"
       - key: SECRET_KEY
         generateValue: true
       # Sized for 8 gunicorn threads plus the background daemon threads that
@@ -164,23 +171,46 @@ services:
       - key: LEADERBOARD_WINNERS_RECIPIENT
         sync: false
 
-  - type: worker
+  # The background worker as a cron job instead of an always-on instance.
+  # Cron jobs bill per second of runtime, so an idle minute costs the few
+  # seconds a run takes rather than the full instance. Each run executes every
+  # interval job once, fires any time-of-day job whose scheduled time has
+  # passed (state kept in the database, see worker.py), then drains the queue
+  # of student jobs for up to WORKER_RUN_MAX_SECONDS before exiting.
+  #
+  # What this changes for a student: a queued quiz, flashcard deck, or
+  # verification email now waits for the next run (up to a minute, plus
+  # start-up) instead of the five-second poll of the old worker. Everything
+  # else is the same code on the same schedule.
+  #
+  # Render evaluates the schedule in UTC; the jobs themselves keep
+  # America/Santiago times in the database, so DST needs no edits here.
+  # There is no preDeployCommand on cron jobs: migrations run in the web
+  # service's pre-deploy step, and a run that starts on a stale schema fails
+  # check_schema_readiness() and simply retries next minute.
+  - type: cron
     name: machreach-worker
     runtime: python
     plan: starter
+    schedule: "* * * * *"
     autoDeployTrigger: checksPass
     buildCommand: pip install --require-hashes -r requirements.lock
-    preDeployCommand: python migrate.py
-    startCommand: python worker.py
+    startCommand: python worker.py --once
     envVars:
       - key: PYTHON_VERSION
         value: "3.13.12"
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: DATABASE_URL
-        fromDatabase:
-          name: machreach-db
-          property: connectionString
+        sync: false
+      # Bound on the queue drain, not on a job in flight. Keep it under the
+      # schedule interval so runs do not pile up behind each other.
+      - key: WORKER_RUN_MAX_SECONDS
+        value: "50"
+      # A cron run is one process with a few daemon threads; this stays far
+      # under any Neon compute's connection limit.
+      - key: DB_POOL_MAX
+        value: "4"
       - key: SECRET_KEY
         sync: false
       - key: ENCRYPTION_KEY

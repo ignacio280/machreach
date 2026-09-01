@@ -211,3 +211,11 @@ def resolve_deploy_version(commit: str | None, *, now=None) -> str:
 
 
 DEPLOY_VERSION = resolve_deploy_version(os.getenv("RENDER_GIT_COMMIT"))
+
+# How old the worker heartbeat may be before /health/operations alerts. The
+# long-running worker beat every minute, so two minutes was one missed beat.
+# The cron-job worker beats once per scheduled run plus every 30s while busy,
+# and a scheduled run can start late, so production sets this to 180.
+WORKER_HEARTBEAT_STALE_SECONDS = max(
+    60, int(os.getenv("WORKER_HEARTBEAT_STALE_SECONDS", "120") or 120)
+)
