@@ -25,6 +25,7 @@ _USE_PG = bool(DATABASE_URL)
 if _USE_PG:
     import os
     import threading
+    import time
     import psycopg2
     import psycopg2.extras
     import psycopg2.errors
@@ -64,8 +65,47 @@ if _USE_PG:
                         # thread gets an error instead of the rows staying
                         # locked until someone restarts a service.
                         options="-c idle_in_transaction_session_timeout=120000",
+                        # A connect that hangs is worse than one that fails:
+                        # Render kills an instance whose /health does not answer
+                        # in five seconds, so an unbounded wait on a database
+                        # that is not answering takes the whole service down
+                        # rather than the one request.
+                        connect_timeout=_CONNECT_TIMEOUT,
                     )
         return _POOL
+
+    # Serverless Postgres (Neon) suspends an idle compute and only wakes it on
+    # the next connection, so the first connect after a quiet spell can be
+    # refused or reset while the wake is still in progress. It succeeds a
+    # moment later. Without a retry that transient is a 500 for whoever
+    # happened to arrive first — or, if it lands on the health check, a killed
+    # instance. Bounded on purpose: three tries and ~0.75s of sleep stay well
+    # inside the five-second health budget, and a database that is genuinely
+    # down still fails fast instead of parking every thread on a hopeless wait.
+    _CONNECT_TIMEOUT = int(os.getenv("DB_CONNECT_TIMEOUT", "10"))
+    _CONNECT_ATTEMPTS = max(1, int(os.getenv("DB_CONNECT_ATTEMPTS", "3")))
+    _CONNECT_BACKOFF = float(os.getenv("DB_CONNECT_BACKOFF", "0.25"))
+
+    def _checkout(pool):
+        """Take a live connection from the pool, absorbing a cold start."""
+        last = None
+        for attempt in range(_CONNECT_ATTEMPTS):
+            try:
+                conn = pool.getconn()
+            except psycopg2.OperationalError as exc:
+                # Pool exhaustion raises PoolError, not this, so a retry here
+                # can only ever be waiting on the server itself.
+                last = exc
+                time.sleep(_CONNECT_BACKOFF * (2 ** attempt))
+                continue
+            # Discard a connection the server already closed under us.
+            if getattr(conn, "closed", 0):
+                pool.putconn(conn, close=True)
+                continue
+            return conn
+        raise last or psycopg2.OperationalError(
+            "could not obtain a live database connection"
+        )
 else:
     import sqlite3
     from machreach_core.config import DATABASE_PATH
@@ -118,11 +158,7 @@ def _db_fingerprint() -> str:
 def get_db():
     if _USE_PG:
         pool = _get_pool()
-        conn = pool.getconn()
-        # Discard a connection the server already closed under us.
-        if getattr(conn, "closed", 0):
-            pool.putconn(conn, close=True)
-            conn = pool.getconn()
+        conn = _checkout(pool)
         broken = False
         try:
             yield conn

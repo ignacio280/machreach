@@ -1,5 +1,8 @@
 """Run database migrations as a deployment phase, never in request workers."""
 
+from urllib.parse import urlsplit
+
+from machreach_core.config import DATABASE_URL
 from machreach_core.db import (
     _USE_PG,
     _exec,
@@ -15,7 +18,34 @@ from student.subscription import normalize_legacy_subscription_tiers
 _MIGRATION_LOCK_ID = 4_624_686_952_405_553_101
 
 
+def _refuse_transaction_pooler() -> None:
+    """Migrations must not run through a transaction pooler.
+
+    Neon shows the *pooled* connection string first, so it is the one that
+    naturally gets pasted into DATABASE_URL. Behind it is PgBouncer in
+    transaction mode, which hands each statement whichever backend is free.
+    The lock below is a **session** lock: taken on one backend and released
+    from another, it protects nothing, and the two services deploying together
+    would run init_db() concurrently — the exact race the lock exists to stop.
+    It fails silently, as a mangled schema rather than an error, so this
+    refuses to start instead of finding out afterwards.
+
+    The app should use the direct endpoint too: the pool sets
+    idle_in_transaction_session_timeout as a startup option, which a pooler is
+    free to reject. Drop the "-pooler" from the host and everything works.
+    """
+    host = (urlsplit(DATABASE_URL).hostname or "") if DATABASE_URL else ""
+    if "-pooler." in host:
+        raise SystemExit(
+            f"DATABASE_URL points at a transaction pooler ({host}).\n"
+            "Migrations take a session-level advisory lock, which a pooler "
+            "silently breaks. Use the direct endpoint — the same host without "
+            "'-pooler' — for both services."
+        )
+
+
 def migrate() -> None:
+    _refuse_transaction_pooler()
     # Both Render services may deploy together. A Postgres advisory lock makes
     # their pre-deploy commands serialize without coupling migration state to a
     # particular service instance.
