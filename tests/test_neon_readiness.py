@@ -160,3 +160,60 @@ def test_the_pool_bounds_how_long_a_connect_may_hang():
     """An unbounded connect turns one slow database into a dead service."""
     assert coredb._CONNECT_TIMEOUT > 0
     assert coredb._CONNECT_TIMEOUT <= 30
+
+
+# ---------------------------------------------------------------------------
+# The migration script corrects a pooled target instead of arguing about it
+# ---------------------------------------------------------------------------
+
+def _unpool(dsn):
+    """Import lazily: scripts/ is not a package on the default path."""
+    import importlib.util
+    import pathlib
+    path = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "migrate_to_neon.py"
+    spec = importlib.util.spec_from_file_location("_mig2neon", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod._unpool(dsn)
+
+
+def test_a_pooled_target_is_rewritten_to_the_direct_endpoint():
+    """The two strings differ by six characters nobody notices when pasting."""
+    fixed, note = _unpool(
+        "postgresql://u:pw@ep-cool-darkness-123456-pooler.us-east-2.aws.neon.tech"
+        "/machreach?sslmode=require"
+    )
+    assert fixed == (
+        "postgresql://u:pw@ep-cool-darkness-123456.us-east-2.aws.neon.tech"
+        "/machreach?sslmode=require"
+    )
+    # Silently fixing it would leave them pasting the same wrong string into
+    # DATABASE_URL at the switch, where migrate.py refuses outright.
+    assert "pooled endpoint" in note
+    assert "DATABASE_URL" in note
+
+
+def test_the_credentials_survive_the_rewrite():
+    """A password containing the host's own characters must not be mangled."""
+    fixed, _ = _unpool(
+        "postgresql://neondb_owner:np_x-pooler.abc@ep-a-pooler.eu-central-1.aws.neon.tech/db"
+    )
+    assert fixed.startswith("postgresql://neondb_owner:np_x-pooler.abc@")
+    assert "@ep-a.eu-central-1.aws.neon.tech/db" in fixed
+
+
+def test_a_direct_target_is_left_exactly_as_it_was():
+    dsn = "postgresql://u:pw@ep-cool-darkness-123456.us-east-2.aws.neon.tech/machreach"
+    fixed, note = _unpool(dsn)
+    assert fixed == dsn
+    assert note == ""
+
+
+def test_a_password_that_looks_like_the_host_is_not_rewritten():
+    """The pathological case the userinfo split exists for."""
+    host = "ep-a-pooler.eu-central-1.aws.neon.tech"
+    fixed, _ = _unpool(f"postgresql://owner:{host}@{host}/db?sslmode=require")
+    # The password keeps its '-pooler'; only the host loses it.
+    assert fixed == (
+        f"postgresql://owner:{host}@ep-a.eu-central-1.aws.neon.tech/db?sslmode=require"
+    )

@@ -10,6 +10,9 @@ shell paste) and the whole command is short enough to type by hand::
     python scripts/migrate_to_neon.py --run
     python scripts/migrate_to_neon.py --verify     # counts on both sides, any time
 
+Either Neon connection string works as the target: the pooled one is rewritten
+to its direct endpoint, with a note, rather than rejected.
+
 Why this and not pg_dump | psql
 -------------------------------
 pg_dump has to match the server's major version and is not installed on every
@@ -64,6 +67,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 # Running a file inside scripts/ puts scripts/ on sys.path, not the repo root.
@@ -102,6 +106,41 @@ def _require_ssl(dsn: str) -> str:
     if "@localhost" in dsn or "@127.0.0.1" in dsn:
         return dsn
     return dsn + ("&" if "?" in dsn else "?") + "sslmode=require"
+
+
+def _unpool(dsn: str) -> tuple[str, str]:
+    """Rewrite a pooled Neon target to its direct endpoint.
+
+    Neon's console shows the pooled string first, so it is the one that gets
+    copied, and the two differ by exactly six characters in the hostname. The
+    pooled one is wrong for everything this script does — it builds the schema
+    by running migrate.py, which takes a session-level advisory lock a
+    transaction pooler cannot hold, and migrate.py refuses to start behind one.
+
+    Refusing here as well would just mean a round trip to fix a typo nobody
+    can see. The direct endpoint is the same database, reached the same way,
+    so this corrects it and says so. Returns the URL and a note to print, or
+    an empty note when there was nothing to change.
+    """
+    parts = urlsplit(dsn)
+    host = parts.hostname or ""
+    if "-pooler." not in host:
+        return dsn, ""
+    fixed_host = host.replace("-pooler.", ".", 1)
+    # Split at the *last* '@' and rewrite only the right-hand side. Replacing
+    # across the whole netloc could match inside a password, and rebuilding it
+    # from parts.username/parts.password would mean re-encoding two values
+    # urlsplit already percent-decoded. Neither risk is worth taking with the
+    # one string that has to keep working.
+    userinfo, _, hostpart = parts.netloc.rpartition("@")
+    hostpart = hostpart.replace(host, fixed_host, 1)
+    netloc = f"{userinfo}@{hostpart}" if userinfo else hostpart
+    return urlunsplit(parts._replace(netloc=netloc)), (
+        f"  NOTE: the target was the pooled endpoint ({host}).\n"
+        f"        Using the direct one instead: {fixed_host}\n"
+        "        Set DATABASE_URL to the direct endpoint too when you switch —\n"
+        "        migrate.py refuses to run behind a pooler, by design."
+    )
 
 
 def _connect(dsn: str, *, readonly: bool = False):
@@ -493,7 +532,9 @@ def main(argv=None) -> int:
     if not args.target:
         parser.error("no target: set NEON_DATABASE_URL or pass --target")
     # Normalized once, here, so every path below shares one target string.
-    args.target = _require_ssl(args.target)
+    args.target, note = _unpool(_require_ssl(args.target))
+    if note:
+        print(note + "\n")
 
     try:
         if args.check:

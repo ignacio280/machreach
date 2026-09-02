@@ -25,6 +25,10 @@ a startup option. Through a pooler the lock protects nothing and the timeout
 may be rejected. `migrate.py` exits rather than start, so a wrong paste costs a
 failed deploy instead of a mangled schema.
 
+If you set the pooled string as `NEON_DATABASE_URL` anyway, the migration
+script corrects it to the direct endpoint and tells you — there is nothing to
+undo. `DATABASE_URL` at step 5 is the one that has to be right by hand.
+
 The app opens at most `DB_POOL_MAX` (12) connections per service, 24 across
 both, which is comfortably inside the direct endpoint's limit.
 
