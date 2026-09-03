@@ -52,10 +52,12 @@ services:
         value: "3.13.12"
       - key: PYTHONUNBUFFERED
         value: "1"
+      # Set in the dashboard, not here, because it points at Neon now and a
+      # connection string is a credential. `fromDatabase: machreach-db` is what
+      # this used to be, and putting that block back is the whole rollback: the
+      # Render database is still there, holding everything up to the cutover.
       - key: DATABASE_URL
-        fromDatabase:
-          name: machreach-db
-          property: connectionString
+        sync: false
       - key: SECRET_KEY
         generateValue: true
       # Sized for 8 gunicorn threads plus the background daemon threads that
@@ -68,7 +70,7 @@ services:
       # connection — Render probes it often enough to hold a compute open by
       # itself. See docs/NEON_MIGRATION.md for what it costs.
       - key: DB_SLEEP_FRIENDLY
-        value: "0"
+        value: "1"
       - key: ENCRYPTION_KEY
         sync: false
       - key: ADMIN_ACTION_SECRET

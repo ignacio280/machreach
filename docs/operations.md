@@ -37,10 +37,12 @@ Before production deploys:
 2. Deploy and exercise staging first. Confirm it uses only staging Postgres, provider test credentials, and staging callback URLs.
 3. Apply the Blueprint. Never share database or provider secrets across environments.
 4. Confirm public `/health` is healthy, protected `/health/operations` has no
-   failed signals, and the worker heartbeat is newer than two minutes. That
-   heartbeat is now written from inside the web service, so a stale one means
-   the in-process scheduler did not start — check the deploy log for the
-   `[gunicorn] background schedule` line.
+   failed signals, and the worker heartbeat is fresh — newer than two minutes
+   normally, or than ninety with `DB_SLEEP_FRIENDLY=1`, which drops the
+   heartbeat to hourly so the database can suspend. That heartbeat is written
+   from inside the web service, so a stale one means the in-process scheduler
+   did not start — check the deploy log for the `[gunicorn] background
+   schedule` line.
 5. In Lemon Squeezy, copy the production store ID plus the product and variant IDs for Plus and every enabled coin pack into the matching `LEMON_SQUEEZY_STORE_ID`, `LS_PRODUCT_*`, and `LS_VARIANT_*` Render variables. A signed event must match all three identifiers; checkout remains disabled when any required identifier is missing.
 6. Exercise staging login, queued AI work, test checkout/webhook, account export, and provider-first deletion before approving production.
 
@@ -72,9 +74,12 @@ After rollback or recovery, verify both health endpoints, worker heartbeat, queu
 ## Required alerts
 
 - Public `/health` non-200 and protected `/health/operations` degraded.
-- Worker heartbeat older than two minutes. This is the alert that the
-  in-process scheduler failed to start, which is silent otherwise: the site
-  serves every page normally while no background job runs at all.
+- Worker heartbeat older than two minutes, or than ninety when
+  `DB_SLEEP_FRIENDLY=1`; `/health/operations` already applies whichever
+  threshold is in force, so alert on what it reports rather than on a clock of
+  your own. This is the alert that the in-process scheduler failed to start,
+  which is silent otherwise: the site serves every page normally while no
+  background job runs at all.
 - Oldest queued job over ten minutes or any job exhausting retries. An
   exhausted job stops alerting on its own only when nothing is left to act on:
   the worker settles verification deliveries for accounts verified another way
