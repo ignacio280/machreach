@@ -40,12 +40,12 @@ jobs:
         working-directory: landing_build
         run: |
           npm ci
-          npm audit --audit-level=moderate
+          ../.github/scripts/npm-audit-retry.sh
       - name: Audit iOS dependencies
         working-directory: ios-app
         run: |
           npm ci --ignore-scripts
-          npm audit --audit-level=moderate
+          ../.github/scripts/npm-audit-retry.sh
 
   test-and-build:
     runs-on: ubuntu-latest
