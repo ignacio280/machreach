@@ -336,3 +336,38 @@ def test_the_heartbeat_alert_widens_with_the_heartbeat(monkeypatch):
     monkeypatch.setattr(config, "DB_SLEEP_FRIENDLY", True)
     health = operations.collect_operational_health()
     assert health["checks"]["worker_heartbeat"]["status"] in {"ok", "alert"}
+
+
+def test_the_drain_loop_survives_its_own_start():
+    """The loop must not race the bookkeeping that start() does after it.
+
+    `_start_drain_loop` is called before `_state["scheduler"]` is assigned, so
+    a loop that keys its `while` off that handle reads None on the first pass
+    and exits before it has waited once. Nothing else drains the queue when
+    DB_SLEEP_FRIENDLY has taken the five-second poll away, so the failure is
+    silent and total: work queues and is never picked up.
+    """
+    import threading
+    import time
+
+    from machreach_core import scheduler as sched
+    from machreach_core import wakeup
+
+    drained = threading.Event()
+
+    class FakeWorker:
+        def process_async_jobs(self):
+            drained.set()
+
+    sched._state.pop("scheduler", None)
+    wakeup.reset()
+    try:
+        sched._start_drain_loop(FakeWorker())
+        thread = sched._state["drain_thread"]
+        time.sleep(0.2)
+        assert thread.is_alive(), "the drain loop exited before it ever waited"
+        wakeup.ring()
+        assert drained.wait(timeout=5), "the doorbell rang and nothing drained"
+    finally:
+        sched.shutdown(wait=True)
+        wakeup.reset()

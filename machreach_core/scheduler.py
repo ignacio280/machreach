@@ -146,9 +146,19 @@ def _start_drain_loop(worker) -> None:
     from machreach_core import wakeup
     from machreach_core.config import DB_SLEEP_SWEEP_SECONDS
 
+    # Raised here, before the thread exists, because the loop used to key its
+    # `while` off _state["scheduler"] -- which start() assigns several
+    # statements *later*. The thread read None on its first pass and exited
+    # before it had waited even once, and the log line below still claimed it
+    # was draining. With the five-second poll gone this is silent and total:
+    # work queues and nothing ever picks it up.
+    _state["draining"] = True
+
     def loop() -> None:
-        while _state.get("scheduler") is not None:
+        while _state.get("draining"):
             wakeup.wait(DB_SLEEP_SWEEP_SECONDS)
+            if not _state.get("draining"):
+                break
             try:
                 worker.process_async_jobs()
             except Exception:
@@ -186,8 +196,9 @@ def shutdown(wait: bool = False) -> None:
         except Exception:
             pass
         _state["scheduler"] = None
-        # The drain loop checks that handle after each wait; ring so it notices
-        # now rather than at the end of a sweep interval.
+    if _state.pop("draining", False):
+        # The loop re-reads that flag after each wait; ring so it notices now
+        # rather than at the end of a sweep interval.
         try:
             from machreach_core import wakeup
 
