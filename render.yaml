@@ -62,6 +62,13 @@ services:
       # also hit the DB; still far under the Postgres plan's connection limit.
       - key: DB_POOL_MAX
         value: "12"
+      # Set to "1" when the database bills for the time its compute is awake
+      # (Neon and friends) rather than by the month. It stops the queue poll,
+      # drops every periodic job to hourly, and keeps /health from opening a
+      # connection — Render probes it often enough to hold a compute open by
+      # itself. See docs/NEON_MIGRATION.md for what it costs.
+      - key: DB_SLEEP_FRIENDLY
+        value: "0"
       - key: ENCRYPTION_KEY
         sync: false
       - key: ADMIN_ACTION_SECRET

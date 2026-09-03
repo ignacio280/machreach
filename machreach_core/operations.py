@@ -94,7 +94,13 @@ def collect_operational_health() -> dict:
             "WHERE job_type = %s ORDER BY updated_at DESC LIMIT 1",
             ("worker_heartbeat",),
         )
-        worker_stale = not heartbeat or _async_job_is_stale(heartbeat.get("updated_at"), 120)
+        # Two minutes matches a heartbeat written every minute. When the
+        # database is allowed to sleep the heartbeat is hourly, and a
+        # two-minute threshold would report a permanently dead worker.
+        from machreach_core.config import DB_SLEEP_FRIENDLY
+
+        heartbeat_max_age = 5400 if DB_SLEEP_FRIENDLY else 120
+        worker_stale = not heartbeat or _async_job_is_stale(heartbeat.get("updated_at"), heartbeat_max_age)
 
         stale_boundary = (
             "updated_at < NOW() - INTERVAL '10 minutes'"

@@ -221,7 +221,7 @@ def test_it_really_runs_a_job_in_this_process(monkeypatch):
         fired.set()
 
     monkeypatch.setattr(worker, "STARTUP_JOBS", (probe,))
-    monkeypatch.setattr(worker, "register_jobs", lambda scheduler: scheduler)
+    monkeypatch.setattr(worker, "register_jobs", lambda scheduler, **kwargs: scheduler)
     monkeypatch.setattr(sched, "_acquire_singleton_lock", lambda: (None, True))
 
     assert sched.start(force=True) is True
@@ -231,3 +231,108 @@ def test_it_really_runs_a_job_in_this_process(monkeypatch):
         sched.shutdown(wait=True)
 
     assert sched.is_running() is False
+
+
+# ── Letting the database sleep ──────────────────────────────────────────────
+#
+# A serverless Postgres bills for the time its compute is awake, so anything on
+# a short timer is a standing charge. These pin the three things that would
+# quietly undo that: a poll, a frequent job, and a liveness probe that opens a
+# connection.
+
+
+def test_sleep_friendly_drops_the_queue_poll():
+    fake = FakeScheduler()
+    worker.register_jobs(fake, sleep_friendly=True)
+    ids = {job["id"] for job in fake.jobs}
+    assert "process_async_jobs" not in ids, "the poll is what keeps the compute awake"
+    # Everything else still has to be there.
+    assert EXPECTED_JOB_IDS - {"process_async_jobs"} == ids
+
+
+def test_sleep_friendly_has_nothing_on_a_short_timer():
+    fake = FakeScheduler()
+    worker.register_jobs(fake, sleep_friendly=True)
+    for job in fake.jobs:
+        if job["trigger"] != "interval":
+            continue
+        seconds = job.get("seconds", 0) + job.get("minutes", 0) * 60 + job.get("hours", 0) * 3600
+        assert seconds >= 3600, f"{job['id']} runs every {seconds}s and would hold the compute open"
+
+
+def test_the_default_still_polls_every_five_seconds():
+    """Off by default: on a database that bills by the month there is nothing
+    to gain and a poll is the simpler thing."""
+    fake = FakeScheduler()
+    worker.register_jobs(fake)
+    by_id = {job["id"]: job for job in fake.jobs}
+    assert by_id["process_async_jobs"]["seconds"] == 5
+    assert by_id["worker_heartbeat"]["minutes"] == 1
+
+
+def test_enqueueing_work_rings_the_doorbell(make_user):
+    from machreach_core import wakeup
+    from machreach_core.db import enqueue_async_job
+
+    client_id = make_user(email="doorbell@example.test")
+    wakeup.reset()
+    assert wakeup.pending() is False
+    enqueue_async_job("test_doorbell", str(client_id), {"a": 1})
+    assert wakeup.pending() is True, "the drain loop would sleep through this job"
+    wakeup.reset()
+
+
+def test_the_doorbell_wakes_a_waiter_before_the_sweep():
+    import threading
+    import time
+
+    from machreach_core import wakeup
+
+    wakeup.reset()
+    woken = threading.Event()
+
+    def waiter():
+        # A sweep interval far longer than the test could tolerate: only the
+        # ring can end this wait in time.
+        if wakeup.wait(30):
+            woken.set()
+
+    thread = threading.Thread(target=waiter, daemon=True)
+    thread.start()
+    time.sleep(0.1)
+    wakeup.ring()
+    assert woken.wait(timeout=5), "the ring did not wake the drain loop"
+    thread.join(timeout=5)
+
+
+def test_liveness_probe_opens_no_connection_when_the_database_may_sleep(client, monkeypatch):
+    """Render calls /health often enough to hold a compute open by itself."""
+    import machreach_core.config as config
+    import machreach_core.db as core_db
+
+    monkeypatch.setattr(config, "DB_SLEEP_FRIENDLY", True)
+
+    def explode(*args, **kwargs):
+        raise AssertionError("/health opened a database connection")
+
+    monkeypatch.setattr(core_db, "get_db", explode)
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "healthy"
+
+
+def test_liveness_probe_still_proves_the_database_by_default(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.get_json() == {"status": "healthy"}
+
+
+def test_the_heartbeat_alert_widens_with_the_heartbeat(monkeypatch):
+    """An hourly heartbeat against a two-minute threshold would report a dead
+    worker forever."""
+    import machreach_core.config as config
+    from machreach_core import operations
+
+    monkeypatch.setattr(config, "DB_SLEEP_FRIENDLY", True)
+    health = operations.collect_operational_health()
+    assert health["checks"]["worker_heartbeat"]["status"] in {"ok", "alert"}

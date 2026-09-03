@@ -299,7 +299,20 @@ def health_check():
     The schema is not unchecked: migrate.py runs check_schema_readiness() as its
     last pre-deploy step, so a deploy carrying a stale schema never reaches an
     instance at all, and /health/operations re-checks it for monitoring.
+
+    With DB_SLEEP_FRIENDLY the probe stops opening a connection. Render calls
+    this endpoint often enough to keep a serverless compute awake by itself, so
+    a liveness check that touches the database would cancel out every other
+    saving. What it reports narrows to what a liveness probe is actually for —
+    is this process able to answer — and whether the database is reachable is
+    left to /health/operations, which a monitor calls once a minute.
     """
+    from machreach_core.config import DB_SLEEP_FRIENDLY
+
+    if DB_SLEEP_FRIENDLY:
+        response = jsonify({"status": "healthy", "database": "not_probed"})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200
     try:
         from machreach_core.db import get_db, _fetchval
         with get_db() as db:
