@@ -653,8 +653,12 @@ def test_worker_entrypoint_registers_recoverable_schedule(monkeypatch):
     registered = []
 
     class FakeScheduler:
-        def __init__(self, timezone):
+        def __init__(self, timezone, job_defaults=None):
             assert timezone == "America/Santiago"
+            # A job that comes due while the process is busy has to run late
+            # rather than be dropped — the schedule shares a process with the
+            # web service now. See worker.JOB_DEFAULTS.
+            assert (job_defaults or {}).get("misfire_grace_time", 0) >= 600
 
         def add_job(self, function, trigger, **kwargs):
             registered.append((function.__name__, trigger, kwargs["id"]))
