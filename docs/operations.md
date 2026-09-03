@@ -2,8 +2,14 @@
 
 ## Availability and environments
 
-The checked-in Render Blueprint defines the paid production `starter` web and
-worker services. Production deploys only after GitHub checks pass. A staging
+The checked-in Render Blueprint defines one paid `starter` web service. The
+background schedule runs inside it, in a daemon thread started by
+gunicorn.conf.py's `post_fork` hook and guarded by a Postgres advisory lock so
+only one process ever schedules. There is no separate worker service: Render
+has no free tier for background workers, and at this product's size a second
+paid service was a fixed cost for a process that was idle almost all the time.
+`python worker.py` still runs the identical schedule standalone, so splitting
+them again is adding the service back in the dashboard. Production deploys only after GitHub checks pass. A staging
 stack is not currently declared in `render.yaml`; before a release requires
 staging, provision it separately with its own paid PostgreSQL database, manual
 deploys, isolated secrets, callback URLs, and Lemon Squeezy test mode.
@@ -29,8 +35,12 @@ Before production deploys:
 
 1. CI must pass for SQLite, PostgreSQL critical paths, Python and Node audits, the landing rebuild, extension validation, and the complete Playwright browser matrix.
 2. Deploy and exercise staging first. Confirm it uses only staging Postgres, provider test credentials, and staging callback URLs.
-3. Apply the Blueprint with the same `ENCRYPTION_KEY` shared by each environment's web and worker services. Never share database or provider secrets across environments.
-4. Confirm public `/health` is healthy, protected `/health/operations` has no failed signals, and the worker heartbeat is newer than two minutes.
+3. Apply the Blueprint. Never share database or provider secrets across environments.
+4. Confirm public `/health` is healthy, protected `/health/operations` has no
+   failed signals, and the worker heartbeat is newer than two minutes. That
+   heartbeat is now written from inside the web service, so a stale one means
+   the in-process scheduler did not start — check the deploy log for the
+   `[gunicorn] background schedule` line.
 5. In Lemon Squeezy, copy the production store ID plus the product and variant IDs for Plus and every enabled coin pack into the matching `LEMON_SQUEEZY_STORE_ID`, `LS_PRODUCT_*`, and `LS_VARIANT_*` Render variables. A signed event must match all three identifiers; checkout remains disabled when any required identifier is missing.
 6. Exercise staging login, queued AI work, test checkout/webhook, account export, and provider-first deletion before approving production.
 
@@ -39,7 +49,10 @@ Database migrations must remain backward-compatible for at least one release.
 ## Incident response
 
 1. Assign an incident lead and record the start time, affected feature, and first known bad deploy or event.
-2. Stop unsafe side effects first: suspend the worker for duplicate email or reward risk, disable checkout for billing drift, or block the affected route.
+2. Stop unsafe side effects first. There is no worker service to suspend: set
+   `MACHREACH_DISABLE_INPROCESS_SCHEDULER=1` on the web service and redeploy,
+   which leaves the queue intact and every job to catch up later. For billing
+   drift, disable checkout; for one bad route, block it.
 3. Preserve Sentry events, worker logs, webhook ledger rows, async-job state, and relevant snapshots. Never copy secrets or recipient content into the incident record.
 4. Restore the previous successful deploy when its code is schema-compatible; otherwise deploy a forward fix.
 5. Reconcile provider state for subscriptions and coin orders, and quarantine uncertain email delivery for manual review.
@@ -59,7 +72,9 @@ After rollback or recovery, verify both health endpoints, worker heartbeat, queu
 ## Required alerts
 
 - Public `/health` non-200 and protected `/health/operations` degraded.
-- Worker heartbeat older than two minutes.
+- Worker heartbeat older than two minutes. This is the alert that the
+  in-process scheduler failed to start, which is silent otherwise: the site
+  serves every page normally while no background job runs at all.
 - Oldest queued job over ten minutes or any job exhausting retries. An
   exhausted job stops alerting on its own only when nothing is left to act on:
   the worker settles verification deliveries for accounts verified another way

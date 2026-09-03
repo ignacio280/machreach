@@ -715,6 +715,59 @@ def send_monthly_leaderboard_email(year: int | None = None, month: int | None = 
         _report_worker_error("MONTHLY_WINNERS", e)
 
 
+# ── The schedule ────────────────────────────────────────────────────────────
+#
+# Defined once and used twice: `python worker.py` runs it in a dedicated
+# service, and machreach_core.scheduler runs the same list inside the web
+# service's gunicorn worker. Two copies of this list would drift, and a drifted
+# schedule is how a daily job silently stops running or an email goes out twice.
+
+SCHEDULER_TIMEZONE = "America/Santiago"
+
+# A job that comes due while the process is busy must still run. In a dedicated
+# service that was rare; sharing a half CPU with eight request threads it is
+# not, and APScheduler's default is to drop a job that misfires by more than a
+# second. An hour of grace, and coalescing so a backlog runs once, not N times.
+JOB_DEFAULTS = {"coalesce": True, "misfire_grace_time": 3600}
+
+# Run once at startup, before their first scheduled tick: recovery and the
+# heartbeat are what make a restart invisible, and waiting a full interval for
+# them leaves /health/operations reporting a stale worker for no reason.
+STARTUP_JOBS = (
+    heartbeat,
+    recover_worker_state,
+    cancel_retired_product_subscriptions,
+    process_leaderboard_payouts,
+    process_async_jobs,
+)
+
+
+def register_jobs(scheduler):
+    """Add every background job to `scheduler`."""
+    scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
+    scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
+    scheduler.add_job(recover_worker_state, "interval", minutes=1, id="recover_worker_state")
+    scheduler.add_job(cancel_retired_product_subscriptions, "interval", minutes=1,
+                      id="retired_billing_cancellations")
+    scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
+    scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
+    scheduler.add_job(clean_abandoned_unverified_accounts, "cron", hour=3, minute=30,
+                      id="clean_abandoned_unverified_accounts")
+    scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
+                      id="expire_billing_grace_periods")
+    scheduler.add_job(process_leaderboard_payouts, "interval", minutes=5,
+                      id="leaderboard_payouts", max_instances=1, coalesce=True)
+    scheduler.add_job(purge_deleted_courses, "cron", hour=3, minute=45,
+                      id="purge_deleted_courses")
+    return scheduler
+
+
+def run_startup_jobs():
+    """Run the startup set inline. Used by the standalone worker only."""
+    for job in STARTUP_JOBS:
+        job()
+
+
 if __name__ == "__main__":
     is_production = bool(os.getenv("RENDER")) or any(
         (os.getenv(name) or "").strip().lower() == "production"
@@ -732,28 +785,9 @@ if __name__ == "__main__":
 
     print("MachReach Uni worker started.")
 
-    scheduler = BlockingScheduler(timezone="America/Santiago")
-    scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
-    scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
-    scheduler.add_job(recover_worker_state, "interval", minutes=1, id="recover_worker_state")
-    scheduler.add_job(cancel_retired_product_subscriptions, "interval", minutes=1,
-                      id="retired_billing_cancellations")
-    scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
-    scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
-    scheduler.add_job(clean_abandoned_unverified_accounts, "cron", hour=3, minute=30,
-                      id="clean_abandoned_unverified_accounts")
-    scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
-                      id="expire_billing_grace_periods")
-    scheduler.add_job(process_leaderboard_payouts, "interval", minutes=5,
-                      id="leaderboard_payouts", max_instances=1, coalesce=True)
-    scheduler.add_job(purge_deleted_courses, "cron", hour=3, minute=45,
-                      id="purge_deleted_courses")
-    # Run once immediately
-    heartbeat()
-    recover_worker_state()
-    cancel_retired_product_subscriptions()
-    process_leaderboard_payouts()
-    process_async_jobs()
+    scheduler = BlockingScheduler(timezone=SCHEDULER_TIMEZONE, job_defaults=JOB_DEFAULTS)
+    register_jobs(scheduler)
+    run_startup_jobs()
 
     try:
         scheduler.start()
