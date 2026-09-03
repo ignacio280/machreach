@@ -85,6 +85,27 @@ IMAP_PASSWORD = os.getenv("IMAP_PASSWORD", "") or SMTP_PASSWORD
 
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+
+# Let the database sleep.
+#
+# A managed Postgres you rent by the month is running anyway, so polling it
+# every few seconds costs nothing. A serverless one that suspends when idle and
+# bills by the second is the opposite: the polling itself is the bill. With
+# this on, the queue is drained by an in-process signal instead of a poll (see
+# machreach_core/wakeup.py), every periodic job drops to hourly, and /health
+# stops opening a connection on every probe — Render's own liveness check runs
+# often enough to keep a compute awake single-handedly.
+#
+# The cost is bluntness: work orphaned by something other than a restart waits
+# for the hourly sweep, and the worker-heartbeat alert widens to match. Leave
+# it off on a database that bills by the month; there is nothing to gain.
+DB_SLEEP_FRIENDLY = os.getenv("DB_SLEEP_FRIENDLY", "").strip().lower() in {"1", "true", "yes", "on"}
+
+# How long the drain loop waits for the doorbell before sweeping anyway. An
+# hour, because a serverless compute suspends after about five minutes idle:
+# anything more frequent keeps it awake for a large share of the month, and the
+# sweep only exists to catch work a live process failed to ring for.
+DB_SLEEP_SWEEP_SECONDS = max(60, int(os.getenv("DB_SLEEP_SWEEP_SECONDS", "3600")))
 _configured_database_path = (os.getenv("DATABASE_PATH") or "").strip()
 if _configured_database_path:
     DATABASE_PATH = Path(_configured_database_path)

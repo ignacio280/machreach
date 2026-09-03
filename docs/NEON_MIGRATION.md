@@ -1,6 +1,35 @@
 # Moving the database to Neon
 
-The app keeps running on Render; only Postgres moves. Nothing here is
+The app keeps running on Render; only Postgres moves.
+
+## Read this first if the target is Neon's free plan
+
+The free plan gives 100 CU-hours a month, which is about **400 hours** of a
+0.25 CU compute. A month is 730. So it only works if the compute is allowed to
+suspend, and MachReach as shipped never lets it: the queue is polled every five
+seconds, three jobs run every minute, and Render's own liveness check calls
+`/health`, which opens a connection. With any of those in place the compute
+never idles, the quota runs out around day 17, and Neon suspends the project —
+existing connections drop and new ones cannot open, for the rest of the month.
+
+Set `DB_SLEEP_FRIENDLY=1` and none of that happens: the queue drains on an
+in-process signal instead of a poll, every periodic job drops to hourly, and
+`/health` stops opening a connection. A database nobody is studying against is
+asked nothing at all, and five active students land somewhere near 20 CU-hours
+a month.
+
+What it costs, so the choice is informed: work orphaned by something other than
+a restart waits for the hourly sweep rather than a minute, the worker-heartbeat
+alert widens from two minutes to ninety, `/health` reports that the process is
+answering rather than that the database is reachable (`/health/operations`
+still checks that), and the first request after a quiet spell pays the wake —
+half a second to two.
+
+Also check the size. The free plan stops accepting writes above 0.5 GB, and
+`--check` below prints the current database size before anything is copied.
+
+Leave `DB_SLEEP_FRIENDLY` unset on a database that bills by the month. There is
+nothing to gain and a poll is the simpler thing. Nothing here is
 automatic — the copy is one command, but the switch is a decision, so it is a
 separate deliberate step and the old database is left intact behind it.
 
@@ -29,8 +58,9 @@ If you set the pooled string as `NEON_DATABASE_URL` anyway, the migration
 script corrects it to the direct endpoint and tells you — there is nothing to
 undo. `DATABASE_URL` at step 5 is the one that has to be right by hand.
 
-The app opens at most `DB_POOL_MAX` (12) connections per service, 24 across
-both, which is comfortably inside the direct endpoint's limit.
+The app opens at most `DB_POOL_MAX` (12) connections, all from the one web
+service now that the background schedule runs inside it, which is comfortably
+inside the direct endpoint's limit.
 
 **Scale-to-zero.** Neon suspends an idle compute and wakes it on the next
 connection, so the first connect after a quiet spell can be refused while the
@@ -84,9 +114,11 @@ database of a few hundred MB is minutes, not hours.
 Any row written between the copy and the switch exists only on the old
 database. To lose nothing:
 
-1. Suspend the **machreach-worker** service in Render (it writes on a schedule).
-2. Put the web service in maintenance, or accept the few minutes of writes you
-   are about to discard — for a student app at night this is usually nothing.
+1. Set `DB_SLEEP_FRIENDLY=1` on the web service if it is not set already, or
+   put the service in maintenance. There is no worker service to suspend any
+   more — the schedule runs inside the web service.
+2. Accept the few minutes of writes you are about to discard; for five students
+   at night this is usually nothing.
 3. Re-run `python scripts/migrate_to_neon.py --run --force`.
 
 `--force` is the whole point of this step: it re-copies from scratch, so the
@@ -113,7 +145,10 @@ Then check, in this order:
     /health
     /health/operations
 
-and log in as a real account.
+and log in as a real account. With `DB_SLEEP_FRIENDLY=1`, `/health` answers
+`{"status": "healthy", "database": "not_probed"}` — that is the endpoint doing
+its narrowed job, not a failure. `/health/operations` is what proves the
+database is reachable.
 
 ## 6. Afterwards
 

@@ -42,7 +42,7 @@ _log = logging.getLogger("machreach.scheduler")
 _LOCK_NAMESPACE = 0x4D414348  # "MACH"
 _LOCK_ID = 1
 
-_state: dict[str, Any] = {"scheduler": None, "lock_conn": None}
+_state: dict[str, Any] = {"scheduler": None, "lock_conn": None, "drain_thread": None}
 _start_lock = threading.Lock()
 
 
@@ -113,7 +113,11 @@ def start(force: bool = False) -> bool:
             job_defaults=worker.JOB_DEFAULTS,
             executors={"default": {"type": "threadpool", "max_workers": 4}},
         )
-        worker.register_jobs(scheduler)
+        from machreach_core.config import DB_SLEEP_FRIENDLY
+
+        worker.register_jobs(scheduler, sleep_friendly=DB_SLEEP_FRIENDLY)
+        if DB_SLEEP_FRIENDLY:
+            _start_drain_loop(worker)
 
         # The startup set runs through the scheduler rather than inline. Inline
         # would block post_fork, and Render kills an instance that cannot answer
@@ -130,6 +134,30 @@ def start(force: bool = False) -> bool:
         atexit.register(shutdown)
         _log.info("[scheduler] running in-process (pid %s)", os.getpid())
         return True
+
+
+def _start_drain_loop(worker) -> None:
+    """Drain the queue on the doorbell instead of on a timer.
+
+    A daemon thread so it never keeps the process alive on its own, and every
+    exception is contained: this loop must outlive any single bad job, because
+    nothing else drains the queue when the poll is gone.
+    """
+    from machreach_core import wakeup
+    from machreach_core.config import DB_SLEEP_SWEEP_SECONDS
+
+    def loop() -> None:
+        while _state.get("scheduler") is not None:
+            wakeup.wait(DB_SLEEP_SWEEP_SECONDS)
+            try:
+                worker.process_async_jobs()
+            except Exception:
+                _log.exception("[scheduler] queue drain failed; continuing")
+
+    thread = threading.Thread(target=loop, name="machreach-queue-drain", daemon=True)
+    thread.start()
+    _state["drain_thread"] = thread
+    _log.info("[scheduler] queue drains on demand, sweeping every %ss", DB_SLEEP_SWEEP_SECONDS)
 
 
 def _now(timezone_name: str):
@@ -158,6 +186,14 @@ def shutdown(wait: bool = False) -> None:
         except Exception:
             pass
         _state["scheduler"] = None
+        # The drain loop checks that handle after each wait; ring so it notices
+        # now rather than at the end of a sweep interval.
+        try:
+            from machreach_core import wakeup
+
+            wakeup.ring()
+        except Exception:
+            pass
     conn = _state.get("lock_conn")
     if conn is not None:
         try:

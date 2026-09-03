@@ -845,7 +845,11 @@ def _decode_json_dict(value) -> dict:
 
 
 def enqueue_async_job(job_type: str, job_key: str, input_payload=None, progress: str = "Queued", visible_payload=None, max_attempts: int = 3) -> dict:
-    """Queue work for the background worker without exposing input_payload in status responses."""
+    """Queue work for the background schedule, and wake it.
+
+    input_payload never appears in a status response. The wake-up at the end is
+    what lets the drain loop stop polling: see machreach_core/wakeup.py.
+    """
     current = get_async_job_status(job_type, job_key)
     if current.get("status") in ("queued", "running", "sending"):
         return current
@@ -894,6 +898,9 @@ def enqueue_async_job(job_type: str, job_key: str, input_payload=None, progress:
                     max_attempts = excluded.max_attempts,
                     updated_at = {now}
             """, (job_type, str(job_key), progress, input_json, payload_json, max_attempts))
+    from machreach_core import wakeup
+
+    wakeup.ring()
     return get_async_job_status(job_type, job_key)
 
 

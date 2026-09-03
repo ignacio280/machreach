@@ -742,12 +742,20 @@ STARTUP_JOBS = (
 )
 
 
-def register_jobs(scheduler):
-    """Add every background job to `scheduler`."""
-    scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
-    scheduler.add_job(heartbeat, "interval", minutes=1, id="worker_heartbeat")
-    scheduler.add_job(recover_worker_state, "interval", minutes=1, id="recover_worker_state")
-    scheduler.add_job(cancel_retired_product_subscriptions, "interval", minutes=1,
+def register_jobs(scheduler, sleep_friendly: bool = False):
+    """Add every background job to `scheduler`.
+
+    With `sleep_friendly`, the frequent jobs drop to hourly and the queue drain
+    is left out entirely — a dedicated loop waits on the doorbell instead, so
+    nothing touches the database while nobody is studying. See
+    machreach_core.config.DB_SLEEP_FRIENDLY for why that is worth doing.
+    """
+    if not sleep_friendly:
+        scheduler.add_job(process_async_jobs, "interval", seconds=5, id="process_async_jobs", max_instances=1)
+    frequent = {"hours": 1} if sleep_friendly else {"minutes": 1}
+    scheduler.add_job(heartbeat, "interval", **frequent, id="worker_heartbeat")
+    scheduler.add_job(recover_worker_state, "interval", **frequent, id="recover_worker_state")
+    scheduler.add_job(cancel_retired_product_subscriptions, "interval", **frequent,
                       id="retired_billing_cancellations")
     scheduler.add_job(refresh_student_plans, "cron", hour=0, minute=0, id="refresh_student_plans")
     scheduler.add_job(send_streak_risk_pushes, "cron", hour=20, minute=0, id="streak_risk_push")
@@ -755,7 +763,11 @@ def register_jobs(scheduler):
                       id="clean_abandoned_unverified_accounts")
     scheduler.add_job(expire_billing_grace_periods, "interval", hours=1,
                       id="expire_billing_grace_periods")
-    scheduler.add_job(process_leaderboard_payouts, "interval", minutes=5,
+    # Payouts settle a week or a month that has already closed, so an hour of
+    # latency is invisible; five minutes was only ever cheap because the
+    # database was running regardless.
+    payout_every = {"hours": 1} if sleep_friendly else {"minutes": 5}
+    scheduler.add_job(process_leaderboard_payouts, "interval", **payout_every,
                       id="leaderboard_payouts", max_instances=1, coalesce=True)
     scheduler.add_job(purge_deleted_courses, "cron", hour=3, minute=45,
                       id="purge_deleted_courses")
