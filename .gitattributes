@@ -1,0 +1,4 @@
+# Shell scripts run on Linux CI runners. A CRLF committed from a Windows
+# checkout makes the shebang read `/usr/bin/env bash\r`, which fails as
+# "bad interpreter" -- so keep them LF wherever they are edited.
+*.sh text eol=lf
