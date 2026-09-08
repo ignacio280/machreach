@@ -88,3 +88,23 @@ def test_operational_alert_fails_uptime() -> None:
     }
 
     assert not operations_are_healthy(payload)
+
+
+def test_a_liveness_probe_that_skipped_the_database_is_still_healthy() -> None:
+    """DB_SLEEP_FRIENDLY makes /health report that it did not probe.
+
+    The exact-match validator this replaced rejected that payload, so the
+    scheduled monitor failed every five minutes while the site was fine.
+    """
+    assert public_is_healthy({"status": "healthy", "database": "not_probed"})
+    assert public_is_healthy({"status": "healthy"})
+
+
+def test_a_payload_the_monitor_cannot_account_for_is_not_health() -> None:
+    # Degraded is the 503 shape; the rest are payloads this script has no
+    # reading of, and guessing at one is how a real outage gets reported green.
+    assert not public_is_healthy({"status": "degraded"})
+    assert not public_is_healthy({"status": "healthy", "database": "unreachable"})
+    assert not public_is_healthy({"status": "healthy", "database": None})
+    assert not public_is_healthy({"status": "healthy", "mode": "maintenance"})
+    assert not public_is_healthy({})
