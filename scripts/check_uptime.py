@@ -91,7 +91,27 @@ def probe_with_retries(
 
 
 def public_is_healthy(payload: dict[str, Any]) -> bool:
-    return payload == {"status": "healthy"}
+    """Accept both shapes /health can return, and nothing else.
+
+    With DB_SLEEP_FRIENDLY the liveness probe stops opening a connection and
+    reports `database: not_probed` beside the status, so an exact match against
+    {"status": "healthy"} rejected every response from the moment that flag went
+    on -- this monitor failed every five minutes for four days while production
+    was fine.
+
+    Still strict about the parts that carry meaning: a degraded status fails, an
+    unrecognised `database` value fails, and so does any key we do not know,
+    because a payload this script cannot account for is not evidence of health.
+    Nor is `not_probed` evidence the database is reachable -- that is what the
+    /health/operations probe below is for, and it runs on every pass.
+    """
+    if payload.get("status") != "healthy":
+        return False
+    if set(payload) - {"status", "database"}:
+        return False
+    if "database" not in payload:
+        return True
+    return payload["database"] == "not_probed"
 
 
 def operations_are_healthy(payload: dict[str, Any]) -> bool:
