@@ -1,7 +1,12 @@
 name: CI
 
 on:
+  # Only master. An unfiltered push trigger ran the whole suite on every branch
+  # as well as again on its pull request, so a single change was two or three
+  # runs and, when one was red, that many failure mails. Branch work is covered
+  # by pull_request; master is covered here.
   push:
+    branches: [master]
   pull_request:
 
 permissions:
