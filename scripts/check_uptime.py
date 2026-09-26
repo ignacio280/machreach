@@ -23,6 +23,12 @@ ORIGIN_HEALTH_URL = os.environ.get(
 )
 USER_AGENT = "MachReach-Uptime/2.0"
 
+# Set this to page on every single failing probe again. The default reports a
+# continuing outage once; see should_page_again() for why.
+ALERT_ON_EVERY_FAILURE = os.environ.get(
+    "UPTIME_ALERT_EVERY_FAILURE", ""
+).strip().lower() in {"1", "true", "yes"}
+
 
 class ProbeError(RuntimeError):
     """Raised when a health endpoint cannot be validated."""
@@ -135,6 +141,90 @@ def diagnose_origin() -> None:
         print(f"::notice title=Render origin unavailable::{exc}")
 
 
+def previous_run_concluded(
+    fetch: Callable[[str], dict[str, Any]] | None = None,
+) -> str | None:
+    """How the run before this one ended: "success", "failure", or unknown.
+
+    Returns None when it genuinely cannot be determined -- no token, no run id,
+    an API error, or a first run with nothing before it. Every caller treats
+    None as "assume nothing" and pages, because a monitor that goes quiet
+    because its own bookkeeping broke is worse than one that repeats itself.
+    """
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    repo = os.environ.get("GITHUB_REPOSITORY", "").strip()
+    run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
+    workflow = os.environ.get("UPTIME_WORKFLOW_FILE", "uptime.yml").strip()
+    if not (token and repo and run_id):
+        return None
+
+    api = os.environ.get("GITHUB_API_URL", "https://api.github.com").rstrip("/")
+    url = (
+        f"{api}/repos/{repo}/actions/workflows/{workflow}/runs"
+        "?status=completed&per_page=5"
+    )
+
+    def _default_fetch(target: str) -> dict[str, Any]:
+        request = urllib.request.Request(
+            target,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {token}",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    try:
+        payload = (fetch or _default_fetch)(url)
+        for run in payload.get("workflow_runs") or []:
+            # Skip this very run: it can already be listed as completed by the
+            # time the step that asks is running.
+            if str(run.get("id")) == run_id:
+                continue
+            return str(run.get("conclusion") or "") or None
+    except Exception as exc:  # noqa: BLE001 - never let bookkeeping hide an outage
+        print(f"::warning title=Uptime history unavailable::{exc}")
+        return None
+    return None
+
+
+def should_page_again(previous: str | None) -> bool:
+    """Page on the transition into an outage, not on every probe during one.
+
+    This runs every five minutes. A single outage therefore sent roughly 288
+    failure mails a day -- the one in September ran fifteen days and produced
+    about eighteen hundred of them. That volume does not convey fifteen days of
+    urgency, it trains you to filter the sender, and then the *next* outage
+    arrives in a folder you no longer read. So the first failing probe pages and
+    the ones behind it stay quiet, which is the same information, once.
+
+    The outage is never hidden: every run still prints the error and the run
+    itself is still red in the Actions tab. Only the notification stops. And
+    anything other than a known-failed previous run pages, so a gap in the
+    history errs towards telling you.
+    """
+    if ALERT_ON_EVERY_FAILURE:
+        return True
+    return previous != "failure"
+
+
+def failure_exit_code() -> int:
+    """Red the first time, quiet while it stays red -- see should_page_again."""
+    previous = previous_run_concluded()
+    if should_page_again(previous):
+        return 1
+    print(
+        "::warning title=MachReach still down::The previous check already failed, "
+        "so this run is left green to stop one outage sending a mail every five "
+        "minutes. The error above is current. Set UPTIME_ALERT_EVERY_FAILURE=1 "
+        "to page on every probe."
+    )
+    return 0
+
+
 def main() -> int:
     try:
         public = probe_with_retries(
@@ -144,7 +234,7 @@ def main() -> int:
     except ProbeError as exc:
         print(f"::error title=MachReach unavailable::{exc}")
         diagnose_origin()
-        return 1
+        return failure_exit_code()
 
     try:
         operations = probe_with_retries(
@@ -155,8 +245,10 @@ def main() -> int:
         print(f"Operations health: {operations}")
     except ProbeError as exc:
         print(f"::error title=MachReach operational alert::{exc}")
-        return 1
+        return failure_exit_code()
 
+    if previous_run_concluded() == "failure":
+        print("::notice title=MachReach recovered::Production is answering again.")
     return 0
 
 

@@ -7,6 +7,10 @@ on:
 
 permissions:
   contents: read
+  # Reading this workflow's own history is how the check knows whether the
+  # previous run already reported the outage, so a continuing one does not
+  # send a mail every five minutes.
+  actions: read
 
 jobs:
   health:
@@ -19,4 +23,5 @@ jobs:
       - name: Verify public and operational health
         env:
           OPERATIONS_SECRET: ${{ secrets.OPERATIONS_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/check_uptime.py
