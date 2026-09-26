@@ -1,8 +1,12 @@
 name: Production uptime
 
+# Manual only. The scheduled run is deliberately gone: every five minutes
+# against a service that is down meant a failure mail every five minutes, and
+# the owner asked for it to stop rather than be made quieter. Restore the two
+# commented lines to turn the monitor back on.
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  # schedule:
+  #   - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
